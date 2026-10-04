@@ -7,6 +7,7 @@ import { applyEdits, modify } from "jsonc-parser";
 import { validEnvVarName } from "./config.js";
 import { resetPathsForConfigKeys, type ConfigResetKey } from "./config-field-paths.js";
 import { parseJsonWithComments } from "./config.js";
+import { globalConfigBasePath, hostConfigDirName, projectConfigBasePath } from "./paths.js";
 
 export type MemoryProfile = "project-only" | "project+global" | "global-only" | "recall-only";
 
@@ -37,19 +38,23 @@ function mergeBankPatch(
 }
 
 export function projectConfigPath(cwd: string): string {
-  return join(cwd, ".pi", "hindsight.json");
+  return `${projectConfigBasePath(cwd)}.json`;
 }
 
 function projectJsoncConfigPath(cwd: string): string {
-  return join(cwd, ".pi", "hindsight.jsonc");
+  return `${projectConfigBasePath(cwd)}.jsonc`;
 }
 
-export function globalConfigPath(home = process.env.HOME || homedir()): string {
-  return join(home, ".pi", "agent", "hindsight.json");
+export function globalConfigPath(home?: string): string {
+  if (home !== undefined) return join(home, hostConfigDirName(), "agent", "hindsight.json");
+  const base = globalConfigBasePath();
+  return `${base ?? join(homedir(), hostConfigDirName(), "agent", "hindsight")}.json`;
 }
 
-function globalJsoncConfigPath(home = process.env.HOME || homedir()): string {
-  return join(home, ".pi", "agent", "hindsight.jsonc");
+function globalJsoncConfigPath(home?: string): string {
+  if (home !== undefined) return join(home, hostConfigDirName(), "agent", "hindsight.jsonc");
+  const base = globalConfigBasePath();
+  return `${base ?? join(homedir(), hostConfigDirName(), "agent", "hindsight")}.jsonc`;
 }
 
 function activeConfigPath(jsonPath: string, jsoncPath: string): string {

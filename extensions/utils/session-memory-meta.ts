@@ -2,6 +2,7 @@ import { readFile, rename, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { mkdir } from "node:fs/promises";
 import { stableSessionId } from "./session.js";
+import { projectStateDir } from "../config/paths.js";
 
 export type SessionMemoryMode = "normal" | "read-only" | "ignored";
 export type SessionMemorySwitch = "normal" | "off";
@@ -26,7 +27,7 @@ export interface EffectiveSessionMemoryMode {
 }
 
 export function sessionMetaPath(cwd: string, sessionFile?: string): string {
-  return join(cwd, ".pi", "hindsight", "session-meta", `${stableSessionId(sessionFile, cwd)}.json`);
+  return join(projectStateDir(cwd), "session-meta", `${stableSessionId(sessionFile, cwd)}.json`);
 }
 
 function nowIso(): string {

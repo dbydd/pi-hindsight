@@ -15,11 +15,12 @@ import { createMemoryIdentity } from "../operations/memory-identity.js";
 import { buildRetainJob } from "./retain-job-builder.js";
 import { enqueueRetain, flushRetain, retainQueuePath } from "../queue/queue.js";
 import { recordRetainDeliveries } from "./retain.js";
+import { hostConfigDirName } from "../config/paths.js";
 
 const execFileAsync = promisify(execFile);
 
 export const DEFAULT_GIT_SEED_LIMIT = 300;
-export const GIT_SEED_RECEIPT_PATH = ".pi/hindsight/git-seed-receipt.json";
+export const GIT_SEED_RECEIPT_PATH = `${hostConfigDirName()}/hindsight/git-seed-receipt.json`;
 
 export interface GitSeedReceipt {
   bankId: string;

@@ -1,9 +1,9 @@
 import { copyFileSync, existsSync, readFileSync, writeFileSync } from "node:fs";
-import { join } from "node:path";
 import { parse, printParseErrorCode, type ParseError } from "jsonc-parser";
 import type { ResolvedConfig } from "../types.js";
 import { DEFAULT_CONFIG } from "./config-defaults.js";
 import { envBool, isRecord, merge, normalizeConfig, validEnvVarName } from "./config-normalize.js";
+import { globalConfigBasePath, projectConfigBasePath } from "./paths.js";
 
 export { DEFAULT_CONFIG } from "./config-defaults.js";
 export { normalizeConfig, validEnvVarName } from "./config-normalize.js";
@@ -101,10 +101,10 @@ export function migrateUserMemoryConfigFiles(
   env: NodeJS.ProcessEnv = process.env,
 ): ConfigMigrationResult[] {
   const results: ConfigMigrationResult[] = [];
-  const home = env.HOME;
+  const globalBase = globalConfigBasePath(env);
   const paths = [
-    home ? configPath(join(home, ".pi", "agent", "hindsight")) : undefined,
-    configPath(join(cwd, ".pi", "hindsight")),
+    globalBase === undefined ? undefined : configPath(globalBase),
+    configPath(projectConfigBasePath(cwd)),
   ].filter((path): path is string => Boolean(path));
   const now = new Date();
   for (const path of paths) {
@@ -119,11 +119,11 @@ export function resolveConfig(cwd: string, env: NodeJS.ProcessEnv = process.env)
   migrateUserMemoryConfigFiles(cwd, env);
   let rawConfig: Record<string, unknown> = {};
   let config = DEFAULT_CONFIG;
-  const home = env.HOME;
-  const homeConfig = home ? readConfigFile(join(home, ".pi", "agent", "hindsight")) : undefined;
+  const globalBase = globalConfigBasePath(env);
+  const homeConfig = globalBase === undefined ? undefined : readConfigFile(globalBase);
   rawConfig = merge(rawConfig, homeConfig);
   config = merge(config, homeConfig);
-  const projectConfig = readConfigFile(join(cwd, ".pi", "hindsight"));
+  const projectConfig = readConfigFile(projectConfigBasePath(cwd));
   rawConfig = merge(rawConfig, projectConfig);
   config = merge(config, projectConfig);
 

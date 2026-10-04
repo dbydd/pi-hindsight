@@ -1,4 +1,5 @@
 import type { ResolvedConfig } from "../types.js";
+import { hostConfigDirName } from "../config/paths.js";
 import {
   PI_HINDSIGHT_CLIENT_PACKAGE,
   PI_HINDSIGHT_CLIENT_RANGE,
@@ -194,8 +195,7 @@ export function formatDebugReport(args: DebugReportArgs): string {
         ),
       },
       observations: observationScopes,
-      overrideProjectBankId:
-        "Set PI_HINDSIGHT_PROJECT_BANK_ID or .pi/hindsight.json banks.project.bankId",
+      overrideProjectBankId: `Set PI_HINDSIGHT_PROJECT_BANK_ID or ${hostConfigDirName()}/hindsight.json banks.project.bankId`,
       globalBankId: args.config.banks.user.enabled ? (args.config.banks.user.bankId ?? null) : null,
       memoryRoutes: {
         recall: [

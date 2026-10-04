@@ -8,9 +8,12 @@ import type { MemoryOperations, MemoryOperationsDeps } from "./memory-operation-
 import { formatReflectResult } from "./reflect-presenter.js";
 import { renderMemoryToolTextResult, retainToolResponse } from "../tui/tool-presenters.js";
 import { getSessionFile } from "../utils/session.js";
+import { hostConfigDirName } from "../config/paths.js";
 
-export const HINDSIGHT_DISABLED_TOOL_MESSAGE =
-  "Hindsight is disabled for this repository (enabled=false). Open /hindsight and set enabled=true (and restore status.style if desired), or edit .pi/hindsight.json.";
+const PROJECT_CONFIG_FILE = `${hostConfigDirName()}/hindsight.json`;
+const PROJECT_STATE_DIR = `${hostConfigDirName()}/hindsight/`;
+
+export const HINDSIGHT_DISABLED_TOOL_MESSAGE = `Hindsight is disabled for this repository (enabled=false). Open /hindsight and set enabled=true (and restore status.style if desired), or edit ${PROJECT_CONFIG_FILE}.`;
 
 export type ToolOperation = Parameters<ExtensionAPI["registerTool"]>[0];
 
@@ -632,7 +635,7 @@ export function createOperationCatalog(deps: MemoryOperationsDeps): OperationCat
         ),
         scope: Type.Optional(
           Type.Union([Type.Literal("project"), Type.Literal("global")], {
-            description: "Which config file to write (default project .pi/hindsight.json).",
+            description: `Which config file to write (default project ${PROJECT_CONFIG_FILE}).`,
           }),
         ),
         dryRun: Type.Optional(
@@ -852,8 +855,7 @@ export function createOperationCatalog(deps: MemoryOperationsDeps): OperationCat
     defineCatalogTool({
       name: "hindsight_scope_migrate",
       label: "Hindsight Scope Migrate Dry-Run",
-      description:
-        "Dry-run only: plan dual-tag / legacy repo:<path-hash> → project:<id> migration. Writes a local receipt under .pi/hindsight/. Never rewrites Hindsight tags or documents. Prefer Hindsight export/import or Pi transcript reimport for actual rebuilds.",
+      description: `Dry-run only: plan dual-tag / legacy repo:<path-hash> → project:<id> migration. Writes a local receipt under ${PROJECT_STATE_DIR}. Never rewrites Hindsight tags or documents. Prefer Hindsight export/import or Pi transcript reimport for actual rebuilds.`,
       parameters: Type.Object({
         bankTags: Type.Optional(
           Type.Array(Type.String(), {
@@ -863,7 +865,7 @@ export function createOperationCatalog(deps: MemoryOperationsDeps): OperationCat
         ),
         writeReceipt: Type.Optional(
           Type.Boolean({
-            description: "Write .pi/hindsight/scope-migrate-receipt.json (default true).",
+            description: `Write ${PROJECT_STATE_DIR}scope-migrate-receipt.json (default true).`,
           }),
         ),
       }),

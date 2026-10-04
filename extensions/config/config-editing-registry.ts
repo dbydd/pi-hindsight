@@ -1,5 +1,6 @@
 import { DEFAULT_CONFIG } from "./config.js";
 import type { ResolvedConfig } from "../types.js";
+import { hostConfigDirName } from "./paths.js";
 import {
   DEFAULT_GLOBAL_BANK_ID,
   type ConfigScope,
@@ -388,8 +389,7 @@ export function buildBaseConfigEditingFields(
       id: "recallStoreLast",
       tab: "Recall",
       label: "Store last recall snapshot",
-      description:
-        "Advanced. Writes the latest successful recall snapshot to a local sidecar under .pi/hindsight/ for debugging.",
+      description: `Advanced. Writes the latest successful recall snapshot to a local sidecar under ${hostConfigDirName()}/hindsight/ for debugging.`,
       value: config.recall.storeLastRecall,
       defaultValue: defaults.recall.storeLastRecall,
       resetKey: "recall.storeLastRecall",

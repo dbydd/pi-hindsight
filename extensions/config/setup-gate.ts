@@ -1,5 +1,6 @@
 import { existsSync } from "node:fs";
 import { join } from "node:path";
+import { hostConfigDirName, projectStateDir } from "./paths.js";
 import type { ResolvedConfig } from "../types.js";
 
 /**
@@ -66,18 +67,18 @@ export function setupRequiredMessage(): string {
 
 function hasProjectConfigFile(cwd: string): boolean {
   return (
-    existsSync(join(cwd, ".pi", "hindsight.json")) ||
-    existsSync(join(cwd, ".pi", "hindsight.jsonc"))
+    existsSync(join(cwd, hostConfigDirName(), "hindsight.json")) ||
+    existsSync(join(cwd, hostConfigDirName(), "hindsight.jsonc"))
   );
 }
 
 function hasLocalRuntimeState(cwd: string, config: ResolvedConfig): boolean {
-  const dir = join(cwd, ".pi", "hindsight");
+  const dir = projectStateDir(cwd);
   if (!existsSync(dir)) return false;
   const candidates = [
     join(cwd, config.retain.queuePath),
     join(cwd, config.retain.queuePath.replace(/\.jsonl$/, ".dead.jsonl")),
-    join(cwd, ".pi", "hindsight", "retain-cursors.json"),
+    join(dir, "retain-cursors.json"),
     join(cwd, config.import.manifestPath),
     join(cwd, config.import.checkpointPath),
     join(cwd, config.recall.lastRecallPath),

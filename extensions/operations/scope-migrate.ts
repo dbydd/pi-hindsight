@@ -7,6 +7,7 @@ import {
   resolveProjectIdentity,
 } from "../banks/banking.js";
 import type { ResolvedConfig } from "../types.js";
+import { hostConfigDirName, projectStateDir } from "../config/paths.js";
 
 export interface ScopeMigratePlan {
   dryRun: true;
@@ -134,7 +135,7 @@ export function buildScopeMigratePlan(args: {
   }
 
   guidance.push(
-    "No silent rewrite: this dry-run only writes a local receipt under .pi/hindsight/.",
+    `No silent rewrite: this dry-run only writes a local receipt under ${hostConfigDirName()}/hindsight/.`,
   );
   guidance.push(
     "When dual-tag can end: every active project memory carries project:<id> (or you completed export/import rebuild).",
@@ -162,7 +163,7 @@ export function buildScopeMigratePlan(args: {
 }
 
 export function resolveScopeMigrateReceiptPath(cwd: string): string {
-  return join(cwd, ".pi", "hindsight", "scope-migrate-receipt.json");
+  return join(projectStateDir(cwd), "scope-migrate-receipt.json");
 }
 
 export async function writeScopeMigrateReceipt(

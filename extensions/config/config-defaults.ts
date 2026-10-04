@@ -1,5 +1,9 @@
 import type { ResolvedConfig } from "../types.js";
 
+import { hostConfigDirName } from "./paths.js";
+
+const DEFAULT_STATE_DIR = `${hostConfigDirName()}/hindsight`;
+
 export const DEFAULT_CONFIG: ResolvedConfig = {
   enabled: true,
   setupComplete: false,
@@ -43,7 +47,7 @@ export const DEFAULT_CONFIG: ResolvedConfig = {
     includeRepoHintsInQuery: true,
     storeLastRecall: false,
     storeLastRecallFailures: false,
-    lastRecallPath: ".pi/hindsight/last-recall.json",
+    lastRecallPath: `${DEFAULT_STATE_DIR}/last-recall.json`,
     topK: 8,
     timeoutMs: 40_000,
     cacheTtlMs: 60_000,
@@ -106,7 +110,7 @@ export const DEFAULT_CONFIG: ResolvedConfig = {
     strip: { message: ["usage", "cost", "responseId"], topLevel: ["id", "parentId"] },
     redactSecrets: true,
     entities: [],
-    queuePath: ".pi/hindsight/retain-queue.jsonl",
+    queuePath: `${DEFAULT_STATE_DIR}/retain-queue.jsonl`,
     flushIntervalMs: 0,
     periodicFlushMaxJobs: 1,
     periodicFlushTimeoutMs: 2_000,
@@ -123,8 +127,8 @@ export const DEFAULT_CONFIG: ResolvedConfig = {
     toolResults: "errors-only",
     toolResultSummaryMaxChars: 500,
     replaceExistingImportedDocs: true,
-    manifestPath: ".pi/hindsight/import-manifest.json",
-    checkpointPath: ".pi/hindsight/import-checkpoint.json",
+    manifestPath: `${DEFAULT_STATE_DIR}/import-manifest.json`,
+    checkpointPath: `${DEFAULT_STATE_DIR}/import-checkpoint.json`,
     resume: true,
   },
   status: {
