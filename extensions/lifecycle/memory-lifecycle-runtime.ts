@@ -9,7 +9,11 @@ export type RuntimeCtx = {
     setStatus(key: string, text: string | undefined): void;
     notify(message: string, level?: string): void;
   };
-  sessionManager?: { getSessionFile?: () => string | undefined };
+  sessionManager?: {
+    getSessionFile?: () => string | undefined;
+    /** Host session title (omp generates/renames sessions; pi has no title). */
+    getSessionName?: () => string | undefined;
+  };
   /** Pi agent abort signal for the active turn, when the context hook provides one. */
   signal?: AbortSignal | undefined;
 };
@@ -18,6 +22,7 @@ export type RuntimeSnapshot = {
   cwd: string;
   ui: RuntimeCtx["ui"];
   sessionFile?: string;
+  sessionName?: string;
   signal?: AbortSignal | undefined;
 };
 
@@ -29,11 +34,14 @@ export function snapshotRuntime(ctx: RuntimeCtx): RuntimeSnapshot | undefined {
     const cwd = ctx.cwd;
     const ui = ctx.ui;
     const sessionFile = getSessionFile(ctx);
+    const sessionName = ctx.sessionManager?.getSessionName?.();
+    const title = typeof sessionName === "string" ? sessionName.trim() : "";
     const signal = ctx.signal;
     return {
       cwd,
       ui,
       ...(sessionFile ? { sessionFile } : {}),
+      ...(title ? { sessionName: title } : {}),
       ...(signal ? { signal } : {}),
     };
   } catch {

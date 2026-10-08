@@ -133,6 +133,12 @@ export function composeRecallQuery(messages: AgentMessage[], policy: RecallQuery
   );
 }
 
+/** Session-title line for the recall query prefix; absent on pi (no titles). */
+function sessionTitleLine(sessionName: string | undefined): string | undefined {
+  const title = sessionName?.trim();
+  return title ? `Session topic: ${title}` : undefined;
+}
+
 const RECALL_SOURCE_FACT_LINES = 3;
 
 export function renderRecallBlocks(blocks: RecallBlock[], topK = 12): string {
@@ -187,6 +193,7 @@ export async function recallForContext(args: {
   scopes: RecallScope[];
   messages: AgentMessage[];
   cwd?: string;
+  sessionName?: string | undefined;
   observer?: RetrievalObserver | undefined;
   contextId?: string | undefined;
   signal?: AbortSignal;
@@ -209,7 +216,9 @@ export async function recallForContext(args: {
         roles: args.config.recall.roles,
         contextTurns: args.config.recall.contextTurns,
         maxQueryChars: args.config.recall.maxQueryChars,
-        preamble: preambleForScope(args.config, scope),
+        preamble: [preambleForScope(args.config, scope), sessionTitleLine(args.sessionName)]
+          .filter((line): line is string => Boolean(line))
+          .join("\n"),
         includeDate: args.config.recall.includeDateInQuery,
         hints: args.cwd ? queryHints(args.cwd, args.config, scope) : [],
       });

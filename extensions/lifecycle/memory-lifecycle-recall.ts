@@ -209,6 +209,7 @@ export function createRecallTurnPolicy(deps: RecallTurnPolicyDeps): RecallTurnPo
             scopes,
             messages: event.messages,
             cwd: runtime.cwd,
+            ...(runtime.sessionName ? { sessionName: runtime.sessionName } : {}),
             ...(deps.observer ? { observer: observe, contextId } : {}),
             ...(runtime.signal ? { signal: runtime.signal } : {}),
           });
