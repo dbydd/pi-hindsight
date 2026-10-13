@@ -873,7 +873,7 @@ describe("extension hooks", () => {
     await expect(pending).resolves.toBeUndefined();
   });
 
-  it("uses repo scope for project recall and source scope for global recall", async () => {
+  it("uses repo scope for project recall and bank-level isolation for global recall", async () => {
     const cwd = mkdtempSync(join(tmpdir(), "pi-hindsight-hooks-"));
     mkdirSync(join(cwd, ".git"));
     mkdirSync(join(cwd, ".pi"));
@@ -943,8 +943,10 @@ describe("extension hooks", () => {
     expect(mocked.client.recall.mock.calls[1]?.[1]).toContain("user: What do I know?");
     expect(mocked.client.recall.mock.calls[1]?.[2]).toMatchObject({
       maxTokens: DEFAULT_CONFIG.recall.userMaxTokens,
-      tagGroups: [{ tags: ["source:pi", "harness:pi"], match: "any_strict" }],
     });
+    // The dedicated user bank isolates at bank level, so global recall sends no tag group:
+    // a filter on tags no observation carries would return nothing.
+    expect(mocked.client.recall.mock.calls[1]?.[2]).not.toHaveProperty("tagGroups");
     expect(mocked.ensureGlobalBank).toHaveBeenCalledWith(
       mocked.client,
       "global-bank",

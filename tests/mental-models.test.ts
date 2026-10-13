@@ -44,13 +44,16 @@ describe("use-profile mental model sets", () => {
     expect(getBuiltInBankTemplate("pi-user-preferences")?.id).toBe("pi-coding-user");
   });
 
-  it("uses retain-compatible source:pi tags on seed definitions", () => {
+  it("seeds no tag on mental model definitions", () => {
+    // `source:pi` is written on memories, while a model's refresh filters observations by
+    // scope tags. A tagged model with no explicit tags_match defaults to all_strict, so a
+    // hardcoded seed tag the bank's observations never carry produced empty documents.
     for (const template of [
       ...listBankTemplatesForAgentUse("coding"),
       ...listBankTemplatesForAgentUse("conversation"),
     ]) {
       for (const model of template.manifest.mental_models ?? []) {
-        expect(model.tags).toEqual(["source:pi"]);
+        expect(model.tags).toEqual([]);
       }
     }
   });
@@ -67,10 +70,12 @@ describe("use-profile mental model sets", () => {
     expect(projectModels.length).toBeGreaterThan(0);
     expect(bankGlobal.length).toBeGreaterThan(0);
     for (const model of projectModels) {
-      expect(model.tags).toEqual(expect.arrayContaining(["source:pi", "project:finalform"]));
+      // Project-tier models are stamped with the project scope tag only — no memory-layer tag.
+      expect(model.tags).toEqual(["project:finalform"]);
     }
     for (const model of bankGlobal) {
-      expect(model.tags).toEqual(["source:pi"]);
+      // Bank-global models are merged unstamped so they inject for every project.
+      expect(model.tags).toEqual([]);
     }
   });
 });

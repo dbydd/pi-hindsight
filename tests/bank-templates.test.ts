@@ -182,13 +182,13 @@ describe("bank templates", () => {
     const global = manifest.mental_models?.find(
       (model) => model.id === "coding-assistant-operating-preferences",
     );
-    expect(global?.tags).toEqual(["source:pi"]);
+    // No tag is stamped on seed models: `source:pi` lives on memories, while a model's refresh
+    // filters observations by scope tags, so a hardcoded seed tag matches nothing.
+    expect(global?.tags).toEqual([]);
     const project = manifest.mental_models?.find(
       (model) => model.id === "project-decisions--github-com-luxus-pi-hindsight",
     );
-    expect(project?.tags).toEqual(
-      expect.arrayContaining(["source:pi", "project:github-com-luxus-pi-hindsight"]),
-    );
+    expect(project?.tags).toEqual(["project:github-com-luxus-pi-hindsight"]);
   });
 
   it("lists expected starter ids for setup ensure checks", () => {

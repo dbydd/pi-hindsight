@@ -454,6 +454,14 @@ export interface HindsightLikeClient {
       signal?: AbortSignal;
     },
   ): Promise<unknown>;
+  /**
+   * Distinct observation scopes (tag sets) in a bank, most populous first. Drives mental
+   * model tag selection so a model filters on a scope tag the bank actually holds.
+   */
+  listObservationScopes?(
+    bankId: string,
+    options?: { limit?: number; offset?: number; signal?: AbortSignal },
+  ): Promise<unknown>;
   getMentalModel?(
     bankId: string,
     mentalModelId: string,

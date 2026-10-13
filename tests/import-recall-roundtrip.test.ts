@@ -198,10 +198,8 @@ describe("retain/import to recall roundtrip quality", () => {
       bankId: "global-bank",
       options: {
         includeChunks: true,
-        tagGroups: [
-          { tags: ["source:pi", "harness:pi"], match: "any_strict" },
-          { tags: ["topic:preferences"], match: "all_strict" },
-        ],
+        // Only the caller's own group: the dedicated user bank adds no scope tag group.
+        tagGroups: [{ tags: ["topic:preferences"], match: "all_strict" }],
       },
     });
     expect(store.recallCalls[0]!.options).not.toHaveProperty("tags");

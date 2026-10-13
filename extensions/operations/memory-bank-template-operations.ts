@@ -7,6 +7,7 @@ import {
 import { resolveProjectIdentity } from "../banks/banking.js";
 import { resolveOperationBank } from "../banks/bank-selection.js";
 import { seedKnowledgePages } from "../banks/knowledge-page-seed.js";
+import { resolveMentalModelScopeTags } from "../banks/mm-scope-tags.js";
 import type { MemoryOperationsDeps } from "./memory-operation-types.js";
 
 export function createBankTemplateOperations(deps: MemoryOperationsDeps) {
@@ -43,8 +44,20 @@ export function createBankTemplateOperations(deps: MemoryOperationsDeps) {
       const cwd = (deps as { getCwd?: () => string }).getCwd?.() ?? process.cwd();
       const resolvedProjectId =
         template.target === "project" ? resolveProjectIdentity(cwd, config).projectId : undefined;
+      // Seed the project scope tag the target bank actually reports. A model's refresh filters
+      // observations by its tags with an implicit `all_strict`, so a tag the bank does not carry
+      // would produce an empty document at first refresh.
+      const derivedScope =
+        template.target === "project"
+          ? await resolveMentalModelScopeTags({
+              client,
+              bankId,
+              identityTags: resolvedProjectId ? [`project:${resolvedProjectId}`] : [],
+            })
+          : undefined;
       const manifest = resolveBankTemplateManifest(template, bankMissionSettings, {
         ...(resolvedProjectId ? { projectId: resolvedProjectId } : {}),
+        ...(derivedScope ? { scopeTags: derivedScope.tags } : {}),
       });
       const dryRun = args.dryRun ?? true;
       const result = await client.importBankTemplate(bankId, manifest, { dryRun });

@@ -124,7 +124,8 @@ describe("Hindsight best-practice invariants", () => {
 
     const scopes = selectMemoryScopes(cwd, config);
 
-    expect(scopeTagsForBank(cwd, config, "pi-global")).toEqual(["source:pi", "harness:pi"]);
+    // The user bank is a dedicated bank, so it carries no tag filter by default.
+    expect(scopeTagsForBank(cwd, config, "pi-global")).toEqual([]);
     expect(scopeTagsForBank(cwd, config, scopes[0]!.bankId)).toEqual([
       expect.stringMatching(/^project:/),
       expect.stringMatching(/^repo:/),
@@ -166,7 +167,7 @@ describe("Hindsight best-practice invariants", () => {
       expect.objectContaining({
         kind: "global",
         bankId: "pi-global",
-        tagGroups: [{ tags: ["source:pi", "harness:pi"], match: "any_strict" }],
+        tagGroups: [],
       }),
     ]);
     expect(JSON.stringify(scopes)).not.toContain("metadata");
@@ -269,8 +270,9 @@ describe("Hindsight best-practice invariants", () => {
         ],
       },
     ]);
-    // Life/user bank does not inherit the coding-bank shared opt-in.
-    expect(global?.tagGroups).toEqual([{ tags: ["source:pi", "harness:pi"], match: "any_strict" }]);
+    // Life/user bank does not inherit the coding-bank shared opt-in, and carries no scope
+    // tag group at all under the default userScopeTags: no OR group is composed for it.
+    expect(global?.tagGroups).toEqual([]);
   });
 
   it("uses deterministic replace documents for historical imports", async () => {
@@ -345,11 +347,12 @@ describe("Hindsight best-practice invariants", () => {
       banks: { ...DEFAULT_CONFIG.banks, user: { enabled: true, bankId: "pi-global" } },
     };
 
-    expect(config.scope.userScopeTags).toEqual(["source:pi", "harness:pi"]);
-    expect(scopeTagsForBank(cwd, config, "pi-global")).toEqual(["source:pi", "harness:pi"]);
+    // Default: no tag filter on the dedicated user bank.
+    expect(config.scope.userScopeTags).toEqual([]);
+    expect(scopeTagsForBank(cwd, config, "pi-global")).toEqual([]);
     expect(
       selectMemoryScopes(cwd, config).find((scope) => scope.kind === "global")?.tagGroups,
-    ).toEqual([{ tags: ["source:pi", "harness:pi"], match: "any_strict" }]);
+    ).toEqual([]);
 
     const custom: ResolvedConfig = {
       ...config,

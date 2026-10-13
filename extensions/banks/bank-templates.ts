@@ -56,9 +56,18 @@ function bankConfigFromMissions(
   };
 }
 
-// Tags must be a subset of tags written at retain time (source:pi, harness:pi, project:*, session:*, repo:*).
-// Project-tier models get project:<id> stamped at apply time (resolveBankTemplateManifest).
-const RETAIN_COMPAT_TAGS = ["source:pi"] as const;
+/**
+ * Seed tags for template mental models.
+ *
+ * No tag is universally compatible: `source:pi` is written on *memories*, while a model's
+ * refresh filters *observations*, which inherit observation-scope tags (`harness:pi`,
+ * `project:<id>`, `vault:<name>`, `source:local-skills`, ...). A tagged model with no explicit
+ * `tags_match` defaults to `all_strict`, so any hardcoded seed tag silently produced empty
+ * documents in every bank that does not carry it. Templates therefore seed no tag — read the
+ * whole bank — and project-tier models are stamped at apply time with the scope tag the bank
+ * actually reports (resolveBankTemplateManifest).
+ */
+const RETAIN_COMPAT_TAGS: readonly string[] = [];
 
 /**
  * Coding-agent MM refresh defaults (oh-my-pi / Claude Code / Hindsight deep dive):
@@ -338,7 +347,14 @@ function bankGlobalMentalModelsForTemplate(templateId: string): readonly BankTem
 export function resolveBankTemplateManifest(
   template: BuiltInBankTemplate,
   bankMissionSettings: BankMissionSettings,
-  options?: { projectId?: string },
+  options?: {
+    projectId?: string;
+    /**
+     * Scope tags for project-tier models, derived from the target bank's own observation
+     * scopes. Omitted keeps the `project:<id>` default; empty reads the whole bank.
+     */
+    scopeTags?: string[];
+  },
 ): BankTemplateManifest {
   const missions = resolveBankMissions(
     bankMissionSettings,
@@ -348,11 +364,14 @@ export function resolveBankTemplateManifest(
   let mental_models = template.manifest.mental_models;
   if (template.target === "project" && projectId && mental_models?.length) {
     const suffix = slugProjectId(projectId);
-    const projectTag = `project:${projectId}`;
+    const scopeTags = options?.scopeTags ?? [`project:${projectId}`];
     const stamped = mental_models.map((model) => ({
       ...model,
       id: `${model.id}--${suffix}`,
-      tags: [...new Set([...(model.tags ?? []), "source:pi", projectTag])],
+      // Only scope tags the bank reports: `source:pi` lives on memories, never on the
+      // observations a model's refresh reads, so stamping it forces `all_strict` to match
+      // nothing.
+      tags: [...new Set([...(model.tags ?? []), ...scopeTags])],
     }));
     const bankGlobal = bankGlobalMentalModelsForTemplate(template.id);
     mental_models = bankGlobal.length > 0 ? [...bankGlobal, ...stamped] : stamped;

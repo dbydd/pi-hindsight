@@ -717,7 +717,7 @@ export function createOperationCatalog(deps: MemoryOperationsDeps): OperationCat
       name: "hindsight_mental_model",
       label: "Hindsight Mental Model",
       description:
-        "Agent control plane for mental models on the selected bank. Actions: list|get|create|update|refresh|delete. list returns metadata only (id, name, tags, max_tokens, last_refreshed_at); use get for full content/reflect_response. Project-tier create defaults tags to source:pi + project:<activeId>. Optional tagsMatch sets refresh tag matching on create/update trigger. Mutating actions default dryRun=true; set dryRun=false to apply.",
+        "Agent control plane for mental models on the selected bank. Actions: list|get|create|update|refresh|delete. list returns metadata only (id, name, tags, max_tokens, last_refreshed_at); use get for full content/reflect_response. Without explicit tags, create derives them from the bank's own observation scopes: a partitioned bank scopes the model to project:<activeId>, a dedicated bank reads the whole bank. A tag filter matching no observations is reported in a `warning` field. Optional tagsMatch sets refresh tag matching on create/update trigger. Mutating actions default dryRun=true; set dryRun=false to apply.",
       parameters: Type.Object({
         action: Type.Union([
           Type.Literal("list"),
@@ -761,6 +761,7 @@ export function createOperationCatalog(deps: MemoryOperationsDeps): OperationCat
           ...(params.tags ? { tags: params.tags } : {}),
           ...(params.maxTokens !== undefined ? { maxTokens: params.maxTokens } : {}),
           ...(params.tagsMatch ? { tagsMatch: params.tagsMatch } : {}),
+          ...(signal ? { signal } : {}),
           ...(mutating
             ? { dryRun: params.dryRun ?? true }
             : params.dryRun !== undefined

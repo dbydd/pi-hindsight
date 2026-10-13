@@ -60,9 +60,10 @@ describe("memory control operations", () => {
       dryRun: true,
     });
     expect(dry).toMatchObject({ dryRun: true, bankId: "coding" });
-    expect((dry as { wouldCreate: { tags: string[] } }).wouldCreate.tags).toEqual(
-      expect.arrayContaining(["source:pi", expect.stringMatching(/^project:/)]),
-    );
+    // The mock client exposes no listObservationScopes, so the bank's scope tags are unknown
+    // and create falls back to no tag filter rather than hardcoding `source:pi`.
+    expect((dry as { wouldCreate: { tags: string[] } }).wouldCreate.tags).toEqual([]);
+    expect(JSON.stringify(dry)).not.toContain("source:pi");
     expect(createMentalModel).not.toHaveBeenCalled();
 
     // Create defaults dry-run; must opt in to write.
@@ -78,7 +79,7 @@ describe("memory control operations", () => {
       "Architecture",
       "What is the architecture?",
       expect.objectContaining({
-        tags: expect.arrayContaining(["source:pi"]),
+        tags: [],
         trigger: { refreshAfterConsolidation: true },
       }),
     );
@@ -250,10 +251,7 @@ describe("memory control operations", () => {
     expect(got.allowlist).toContain("projectBankId");
     expect(got.allowlist).toContain("userScopeTags");
     expect((got as { values: { projectBankId?: string } }).values.projectBankId).toBe("kai-coding");
-    expect((got as { values: { userScopeTags?: string[] } }).values.userScopeTags).toEqual([
-      "source:pi",
-      "harness:pi",
-    ]);
+    expect((got as { values: { userScopeTags?: string[] } }).values.userScopeTags).toEqual([]);
     expect(JSON.stringify(got)).not.toContain("sk-secret");
     expect((got as { values: { apiKeyEnvVar?: string } }).values.apiKeyEnvVar).toBe(
       "HINDSIGHT_API_KEY",

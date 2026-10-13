@@ -487,7 +487,9 @@ describe("resolveConfig", () => {
     expect(config.recall.types).toEqual(["observation"]);
     expect(config.observations.enabled).toBe(true);
     expect(config.observations.scopes).toEqual([["harness:pi"], ["project:{projectId}"]]);
-    expect(config.scope.userScopeTags).toEqual(["source:pi", "harness:pi"]);
+    // User-bank recall carries no tag filter by default: the bank itself isolates, and a
+    // filter no observation carries would blank the recall (#622).
+    expect(config.scope.userScopeTags).toEqual([]);
     expect(config.recall.contextTurns).toBe(2);
     expect(config.recall.roles).toEqual(["user", "assistant"]);
     expect(config.recall.maxQueryChars).toBe(800);
@@ -601,6 +603,6 @@ describe("resolveConfig", () => {
       join(cwd, ".pi", "hindsight.json"),
       JSON.stringify({ scope: { userScopeTags: "harness:pi" } }),
     );
-    expect(resolveConfig(cwd).scope.userScopeTags).toEqual(["source:pi", "harness:pi"]);
+    expect(resolveConfig(cwd).scope.userScopeTags).toEqual([]);
   });
 });

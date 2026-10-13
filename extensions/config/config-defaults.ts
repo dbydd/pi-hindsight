@@ -7,7 +7,12 @@ export const DEFAULT_CONFIG: ResolvedConfig = {
     mode: "domain-tagged",
     projectIdStrategy: "remote",
     includeSharedObservations: false,
-    userScopeTags: ["source:pi", "harness:pi"],
+    // Empty by default: the user bank is a dedicated bank, so bank-level isolation already
+    // separates it. `source:pi`/`harness:pi` are memory-layer tags, while recall and a mental
+    // model's refresh filter observations by scope tags — a filter no observation carries
+    // returns nothing, which silently blanked user-bank recall on banks written by other tools.
+    // Operators whose user bank shares one tag family across writers can name tags here.
+    userScopeTags: [],
     extraScopeTags: [],
   },
   hindsight: { baseUrl: "http://localhost:8888", timeoutMs: 30_000 },

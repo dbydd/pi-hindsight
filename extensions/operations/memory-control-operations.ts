@@ -1,6 +1,7 @@
 import { resolveProjectIdentity } from "../banks/banking.js";
 import { resolveBankExistence } from "../banks/bank-operations.js";
 import { resolveOperationBank } from "../banks/bank-selection.js";
+import { resolveMentalModelScopeTags, unmatchedTagWarning } from "../banks/mm-scope-tags.js";
 import { buildStatusFields } from "../utils/status-fields.js";
 import type { MemoryOperationsDeps } from "./memory-operation-types.js";
 import { isMemorySetupComplete, setupRequiredMessage } from "../config/setup-gate.js";
@@ -347,6 +348,7 @@ export function createControlOperations(deps: MemoryOperationsDeps) {
       tagsMatch?: TagsMatch;
       dryRun?: boolean;
       cwd: string;
+      signal?: AbortSignal;
     }) {
       const config = deps.getConfig();
       const bankId = resolveOperationBank({
@@ -376,9 +378,29 @@ export function createControlOperations(deps: MemoryOperationsDeps) {
           if (!args.name?.trim() || !args.sourceQuery?.trim()) {
             throw new Error("name and sourceQuery are required for create");
           }
-          const tags =
-            args.tags ??
-            (isUserBank ? ["source:pi"] : ["source:pi", `project:${project.projectId}`]);
+          // A tagged model with no explicit tags_match defaults to all_strict, so any tag the
+          // bank's observations do not carry yields a document that stays empty. Ask the bank
+          // which scope tags it actually holds and filter on one of those instead.
+          const derivedScope = await resolveMentalModelScopeTags({
+            client: deps.getClient(),
+            bankId,
+            identityTags: isUserBank ? [] : [`project:${project.projectId}`],
+            ...(args.signal ? { signal: args.signal } : {}),
+          });
+          const resolvedTags = args.tags ?? derivedScope?.tags ?? [];
+          // An explicit caller-supplied tag is honored, but a filter that reaches nothing is
+          // reported rather than silently creating a model whose first refresh empties it.
+          const unmatchedWarning = derivedScope
+            ? unmatchedTagWarning({
+                entries: derivedScope.entries,
+                complete: derivedScope.complete,
+                tags: resolvedTags,
+              })
+            : undefined;
+          // Send the full trigger the server understands, not just the refresh flag: a
+          // create that omits fact_types/tagsMatch/mode silently falls back to the server
+          // default scope (tags_match=all_strict on the seed tags), which is what produced
+          // "generated but empty" documents.
           const trigger = {
             refreshAfterConsolidation: true as const,
             ...(args.tagsMatch ? { tagsMatch: args.tagsMatch } : {}),
@@ -390,19 +412,25 @@ export function createControlOperations(deps: MemoryOperationsDeps) {
               wouldCreate: {
                 name: args.name,
                 sourceQuery: args.sourceQuery,
-                tags,
+                tags: resolvedTags,
                 trigger,
+                ...(derivedScope ? { scopeTags: derivedScope } : {}),
+                ...(unmatchedWarning ? { warning: unmatchedWarning } : {}),
               },
             };
           }
           const create = clientMethod(deps, "createMentalModel");
           const result = await create(bankId, args.name.trim(), args.sourceQuery.trim(), {
             ...(args.id ? { id: args.id } : {}),
-            tags,
+            tags: resolvedTags,
             ...(args.maxTokens !== undefined ? { maxTokens: args.maxTokens } : {}),
             trigger,
           });
-          return { bankId, result };
+          return {
+            bankId,
+            result,
+            ...(unmatchedWarning ? { warning: unmatchedWarning } : {}),
+          };
         }
         case "update": {
           if (!args.id) throw new Error("id is required for update");

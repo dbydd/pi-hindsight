@@ -274,6 +274,27 @@ export function createHindsightClient(config: ResolvedConfig): HindsightLikeClie
         (signal) => raw.listMentalModels(bankId, { ...options, signal }),
         options?.signal,
       ),
+    listObservationScopes: (bankId, options) =>
+      withTimeout(
+        "hindsight listObservationScopes",
+        timeoutMs,
+        (signal) =>
+          withRetry("listObservationScopes", async () => {
+            const query = {
+              ...(options?.limit !== undefined ? { limit: options.limit } : {}),
+              ...(options?.offset !== undefined ? { offset: options.offset } : {}),
+            };
+            const response = await sdk.listObservationScopes({
+              client: lowLevel,
+              path: { bank_id: bankId },
+              // The 0.10 generated client may still type this endpoint's query as never.
+              ...(Object.keys(query).length > 0 ? { query: query as never } : {}),
+              signal,
+            });
+            return unwrapSdkResponse(response, "listObservationScopes");
+          }),
+        options?.signal,
+      ),
     getMentalModel: (bankId, mentalModelId, options) =>
       withTimeout(
         "hindsight getMentalModel",
