@@ -16,6 +16,7 @@ export const AGENT_CONFIG_ALLOWLIST = [
   "projectIdStrategy",
   "includeSharedObservations",
   "userScopeTags",
+  "extraScopeTags",
   "projectBankId",
   "enableGlobalBank",
   "globalBankId",
@@ -50,6 +51,7 @@ export function agentConfigView(config: ResolvedConfig): Record<AgentConfigKey, 
     projectIdStrategy: config.scope.projectIdStrategy,
     includeSharedObservations: config.scope.includeSharedObservations,
     userScopeTags: config.scope.userScopeTags,
+    extraScopeTags: config.scope.extraScopeTags,
     projectBankId: config.banks.project.bankId,
     enableGlobalBank: config.banks.user.enabled,
     globalBankId: config.banks.user.bankId,
@@ -87,7 +89,7 @@ const BOOLEAN_KEYS = new Set<AgentConfigKey>([
 
 const NUMBER_KEYS = new Set<AgentConfigKey>(["recallMaxTokens", "timeoutMs"]);
 
-const STRING_ARRAY_KEYS = new Set<AgentConfigKey>(["userScopeTags"]);
+const STRING_ARRAY_KEYS = new Set<AgentConfigKey>(["userScopeTags", "extraScopeTags"]);
 
 function assertAgentConfigValue(key: AgentConfigKey, value: unknown): unknown {
   if (BOOLEAN_KEYS.has(key)) {

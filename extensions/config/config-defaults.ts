@@ -8,6 +8,7 @@ export const DEFAULT_CONFIG: ResolvedConfig = {
     projectIdStrategy: "remote",
     includeSharedObservations: false,
     userScopeTags: ["source:pi", "harness:pi"],
+    extraScopeTags: [],
   },
   hindsight: { baseUrl: "http://localhost:8888", timeoutMs: 30_000 },
   agentUse: "coding",

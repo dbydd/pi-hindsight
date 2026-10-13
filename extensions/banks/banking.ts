@@ -233,13 +233,28 @@ export function baseTags(
   return tags;
 }
 
-/** Project recall filter: match either stable project tag or legacy path-hash repo tag. */
+/**
+ * Project recall filter: match the stable project tag, the legacy path-hash repo
+ * tag, or any `scope.extraScopeTags` the operator declared.
+ *
+ * The extras exist for banks an external writer fills with its own scope tag
+ * (an Obsidian vault sync stamping `vault:<name>`, say): those memories carry no
+ * project tag, so a project-only filter never sees them. Naming the foreign tag
+ * here admits that content; an empty list leaves recall exactly as it was.
+ */
 export function recallScopeTags(cwd: string, config?: ResolvedConfig): string[] {
   const identity = resolveProjectIdentity(
     cwd,
     config ?? ({ scope: { projectIdStrategy: "remote" } } as ResolvedConfig),
   );
-  return [projectScopeTag(identity.projectId), legacyRepoScopeTag(identity.legacyRepoKey)];
+  const extras = config?.scope.extraScopeTags ?? [];
+  return [
+    ...new Set([
+      projectScopeTag(identity.projectId),
+      legacyRepoScopeTag(identity.legacyRepoKey),
+      ...extras,
+    ]),
+  ];
 }
 
 export function formatProjectIdentityForStatus(identity: ProjectIdentity): string {

@@ -235,6 +235,7 @@ export function normalizeConfig(
         projectIdStrategy?: unknown;
         includeSharedObservations?: unknown;
         userScopeTags?: unknown;
+        extraScopeTags?: unknown;
       };
     }
   ).scope;
@@ -242,6 +243,11 @@ export function normalizeConfig(
   const userScopeTags = [
     ...new Set(
       stringArray(scopeRaw?.userScopeTags, DEFAULT_CONFIG.scope.userScopeTags).filter(Boolean),
+    ),
+  ];
+  const extraScopeTags = [
+    ...new Set(
+      stringArray(scopeRaw?.extraScopeTags, DEFAULT_CONFIG.scope.extraScopeTags).filter(Boolean),
     ),
   ];
   return {
@@ -268,6 +274,9 @@ export function normalizeConfig(
       ),
       // Empty array is intentional: no tag filter on user-bank recall (#592).
       userScopeTags,
+      // Foreign scope tags an external writer stamps (e.g. vault:<name> from a
+      // vault sync plugin). Empty keeps strict project-only recall.
+      extraScopeTags,
     },
     hindsight: {
       baseUrl: stringValue(config.hindsight?.baseUrl, DEFAULT_CONFIG.hindsight.baseUrl),

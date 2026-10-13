@@ -98,6 +98,20 @@ export interface ScopeConfig {
    * Empty array means no tag filter (bank-level isolation only).
    */
   userScopeTags: string[];
+  /**
+   * Additional tags OR-ed into the project-bank recall scope filter
+   * (`any_strict`), beside `project:<id>` and `repo:<legacy-key>`.
+   *
+   * For banks whose content is written by an external tool that stamps its own
+   * scope tag instead of the Pi project tag — e.g. an Obsidian vault sync plugin
+   * that writes `vault:<name>` — those memories are otherwise invisible to
+   * project recall, because the scope filter requires a project tag and the
+   * external writer never adds one. Naming the foreign tag here admits that
+   * content without widening isolation for anyone who leaves this empty.
+   *
+   * Empty (default) keeps the previous strict project-only behaviour.
+   */
+  extraScopeTags: string[];
 }
 
 export interface ResolvedConfig {
