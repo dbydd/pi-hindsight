@@ -170,6 +170,11 @@ Paths below are Pi's resolved defaults; see [Host config paths](#host-config-pat
     }
   ],
   "banksFallback": ["coding"],
+  "decision": {
+    "model": "role:judge",
+    "timeoutMs": 3000,
+    "fallback": { "recallBanks": ["coding"], "retainBanks": ["coding"] }
+  },
   "recall": {
     "budget": "mid",
     "maxTokens": 800,
@@ -276,3 +281,51 @@ writable through `hindsight_config`.
   }
 }
 ```
+
+## Decision layer (`decision`)
+
+Optional model-driven bank routing. When enabled, one extra model call per turn answers a small
+question table: whether the turn injects recall, and for every offered bank whether recall reads
+it and whether retain writes to it. Recall and retain then use that routing instead of a fixed
+bank list.
+
+```jsonc
+{
+  "decision": {
+    "enabled": true,
+    "model": "role:judge",
+    "maxTokens": 200,
+    "timeoutMs": 3000,
+    "maxContextChars": 6000,
+    "cacheTtlMs": 60000,
+    "fallback": { "recallBanks": ["coding"], "retainBanks": ["coding"] },
+  },
+}
+```
+
+| Field                                  | Meaning                                                                                                                                                     |
+| -------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `enabled`                              | When false the layer decides nothing and the memory paths keep their own bank selection.                                                                    |
+| `model`                                | `role:<name>` on a host that has model roles, or `<provider>/<modelId>` on every host. A role spec on a host without roles falls back to the session model. |
+| `maxTokens`                            | Answer budget for backends that accept one.                                                                                                                 |
+| `timeoutMs`                            | Per-attempt budget. A backend that exceeds it is abandoned and the next one is tried.                                                                       |
+| `maxContextChars`                      | Budget for the recent-activity part of the prompt. The last user message and the task state are always included.                                            |
+| `cacheTtlMs`                           | Reuse window for a decision, keyed by the offered bank ids and the last user message content.                                                               |
+| `fallback.recallBanks` / `retainBanks` | Bank ids used when no backend answers. Empty means the top-level `banksFallback` list. Unknown ids are dropped at load time.                                |
+
+**Context.** The prompt carries the last user message, the host task state (`unknown` when it
+cannot be read, never "no tasks"), the recent activity that fits the budget, and every candidate
+bank with its `access` and `description`.
+
+**Routing rules.** Only enabled, access-compatible banks are offered: read routing skips `write`
+entries, write routing skips `read` entries, and a bank id the model returns that was not offered
+is dropped.
+
+**Degradation.** The layer tries backends in order — a host-native judgment surface, a host
+classifier, then a text bridge over any chat model — and ends at the fallback banks. It keeps
+recall on and never raises into the calling turn, so an unreachable decision model costs routing
+quality instead of memory.
+
+**Status.** This branch ships the decision core. The automatic recall and retain paths still use
+their own bank selection until the wiring slice lands, so the settings above describe a layer that
+is not yet wired into those paths.

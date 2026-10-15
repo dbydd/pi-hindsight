@@ -73,6 +73,29 @@ export type BankAlias = "project" | "user";
 export type BankRetainMode = "always" | "decision" | "explicit-only";
 export type BankDerive = "repo" | "cwd" | "manual" | "basename";
 
+/** Bank ids a failed decision falls back to, per memory path. */
+export interface DecisionFallbackConfig {
+  /** Recall routing used when the decision model cannot answer. */
+  recallBanks: string[];
+  /** Retain routing used when the decision model cannot answer. */
+  retainBanks: string[];
+}
+
+/**
+ * Decision-model settings: one call picks recall injection and bank routing.
+ * `model` takes `role:<name>` (role-capable hosts) or `<provider>/<modelId>`.
+ */
+export interface DecisionConfig {
+  enabled: boolean;
+  model: string;
+  maxTokens: number;
+  timeoutMs: number;
+  /** Character budget for the recent-activity section of the decision prompt. */
+  maxContextChars: number;
+  cacheTtlMs: number;
+  fallback: DecisionFallbackConfig;
+}
+
 export interface BankEntryMission {
   retain?: string;
   reflect?: string;
@@ -171,6 +194,8 @@ export interface ResolvedConfig {
   banks: BankConfigEntry[];
   /** Bank ids used when the decision model fails or returns unusable output. */
   banksFallback: string[];
+  /** Model-driven recall-inject gate and bank routing. */
+  decision: DecisionConfig;
   recall: {
     enabled: boolean;
     budget: Budget;
