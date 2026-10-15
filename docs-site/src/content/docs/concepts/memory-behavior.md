@@ -174,7 +174,12 @@ One-turn retain skip: `/hindsight:next-opt-out` or hub key `x`.
 
 ## Global memory policy
 
-`globalRetain.mode` is always `explicit-only`. Automatic project transcript retain never writes User Bank (global) memory in any profile.
+Automatic retain writes only to entries whose `banks[].retain.mode` allows it: `always` on every
+retain turn, `decision` when the decision model picks that entry, `explicit-only` never. The coding
+role defaults to `always` and every other entry to `explicit-only`, so the shipped defaults retain
+to the Project Bank only — the User Bank joins automatic retain only when its entry is set to
+`always` or `decision`. `globalRetain.mode`/`userRetain.mode` is single-valued (`explicit-only`)
+and maps onto the user entry's mode.
 
 `hindsight_retain_global` is the preferred tool for durable global user identity, preferences, and cross-project workflows.
 

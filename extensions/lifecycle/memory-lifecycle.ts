@@ -11,9 +11,10 @@ import { isMemorySetupComplete, setupRequiredMessage } from "../config/setup-gat
 import { probeHostDirs, setRuntimeSessionFile } from "../config/paths.js";
 import { deriveProjectBankId } from "../banks/banking.js";
 import {
+  autoRetainEntries,
   bankEntryEnabled,
+  bankRetainMode,
   bankMissionSettings,
-  canWriteBank,
   codingBankEntry,
   userBankEntry,
 } from "../config/banks.js";
@@ -109,14 +110,23 @@ export function createMemoryLifecycle(
 
   /**
    * Build or drop the decision host for this session. Routing is per-session
-   * opt-in: it is only wired when `recall.mode` or `recall.bankMode` asks for a
-   * decision, and every failure leaves the degraded host in place, so the recall
-   * path always has a layer that falls back instead of costing a turn its memory.
+   * opt-in: it is only wired when `recall.mode`, `recall.bankMode`, or an entry's
+   * `retain.mode: "decision"` asks for a decision, and every failure leaves the
+   * degraded host in place, so both paths always have a layer that falls back
+   * instead of costing a turn its memory.
    */
   const refreshDecisionHost = async (): Promise<void> => {
     decisionHost = undefined;
     decisionLayer = undefined;
-    if (config.recall.mode !== "decision" && config.recall.bankMode !== "decision") return;
+    const retainNeedsDecision = autoRetainEntries(config).some(
+      (entry) => bankRetainMode(config, entry) === "decision",
+    );
+    if (
+      config.recall.mode !== "decision" &&
+      config.recall.bankMode !== "decision" &&
+      !retainNeedsDecision
+    )
+      return;
     if (!decisionAdapters?.loadDecisionHost) {
       decisionHost = degradedDecisionHost();
       return;
@@ -181,30 +191,39 @@ export function createMemoryLifecycle(
     reloadConfig,
   };
 
+  const readTodo = decisionAdapters?.readTodo;
+  /**
+   * The session's decision layer, built on first use from the host this session
+   * resolved. Recall and retain share one instance, so both paths route through
+   * the same backends, cache, and telemetry.
+   */
+  const getDecisionLayer = (): DecisionLayer | undefined => {
+    if (!decisionHost) return undefined;
+    decisionLayer ??= createDecisionLayer({
+      host: decisionHost,
+      getConfig: () => config,
+      ...(observer ? { observer } : {}),
+      ...(readTodo ? { readTodo: () => readTodo() } : {}),
+    });
+    return decisionLayer;
+  };
+
   const retainPolicy = createRetainTurnPolicy({
+    ...(observer ? { observer } : {}),
     getConfig: () => config,
     getClient: () => client,
     getProjectBankId: () => projectBankId,
+    getDecisionLayer,
     setMemoryStatus: (runtime, activity, queueRemaining) =>
       setMemoryStatus(runtime, activity, undefined, queueRemaining),
     notify,
   });
 
-  const readTodo = decisionAdapters?.readTodo;
   const recallPolicy = createRecallTurnPolicy({
     ...(observer ? { observer } : {}),
     getConfig: () => config,
     getClient: () => client,
-    getDecisionLayer: () => {
-      if (!decisionHost) return undefined;
-      decisionLayer ??= createDecisionLayer({
-        host: decisionHost,
-        getConfig: () => config,
-        ...(observer ? { observer } : {}),
-        ...(readTodo ? { readTodo: () => readTodo() } : {}),
-      });
-      return decisionLayer;
-    },
+    getDecisionLayer,
     setMemoryStatus: (runtime, activity, memoryCount) =>
       setMemoryStatus(runtime, activity, memoryCount),
     notify,
@@ -315,19 +334,9 @@ export function createMemoryLifecycle(
       event: AgentEndEvent,
       ctx: RuntimeCtx,
     ): Promise<{ queued: boolean; sent: number; remaining: number }> {
-      const canRetainProject = Boolean(
-        codingBankEntry(config) &&
-        bankEntryEnabled(codingBankEntry(config)!) &&
-        canWriteBank(codingBankEntry(config)!),
-      );
-      const userForRetain = userBankEntry(config);
-      const canRetainUser = Boolean(
-        userForRetain &&
-        bankEntryEnabled(userForRetain) &&
-        canWriteBank(userForRetain) &&
-        userForRetain.bankId,
-      );
-      if (!config.enabled || !config.retain.enabled || (!canRetainProject && !canRetainUser))
+      // The retain policy makes the same check; this one keeps the runtime snapshot
+      // and the setup gate off the path when no entry could be routed to anyway.
+      if (!config.enabled || !config.retain.enabled || autoRetainEntries(config).length === 0)
         return { queued: false, sent: 0, remaining: 0 };
       const runtime = snapshotRuntime(ctx);
       if (!runtime) return { queued: false, sent: 0, remaining: 0 };

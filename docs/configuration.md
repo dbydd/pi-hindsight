@@ -103,12 +103,62 @@ When a profile uses user memory, guided setup asks for a user bank ID and writes
 | `enabled`       | Defaults to `true`. `{ "id": "x", "enabled": false }` disables a bank from any layer.                                                                       |
 | `access`        | `read`, `write`, or `read-write` (default). Read paths skip `write` entries; write paths skip `read` entries.                                               |
 | `derive`        | Only read on a coding entry (`project` role): `repo`, `cwd`, `manual`, `basename`. Ignored elsewhere.                                                       |
+| `retain`        | Automatic write routing for this entry: `enabled` and `mode`. See **Automatic retain modes** below.                                                         |
 | `tagGroups`     | Explicit Hindsight tag groups; replaces derived tags for that entry.                                                                                        |
 | `banksFallback` | Bank ids used when the decision model fails or returns unusable output. Replaced wholesale per layer, not merged.                                           |
 
 **Layer merge:** global Pi config is the base and the repo config overlays it. Entries merge by `id` — field-level, with `mission`, `recall`, and `retain` merged one level deeper and `tagGroups` replaced whole. A new `id` appends to the tail, so recall order stays stable. `banksFallback` is replaced wholesale.
 
 **Legacy three-slot configs still work.** A `banks` object is normalized on read: `project` (or `coding`) becomes the coding entry, and `user` (or `global`, or `life`) becomes the life entry, carrying `enabled`, `bankId`, `derive`, and mission fields with them. Writers only ever produce the array form.
+
+### Automatic retain modes (`banks[].retain`)
+
+Which banks a completed turn's transcript is written to. Every entry carries its own mode; there is
+no global switch beyond `retain.enabled`.
+
+```jsonc
+{
+  "banks": [
+    { "id": "coding", "alias": "project" },
+    {
+      "id": "life",
+      "alias": "user",
+      "bankId": "agent-global-stable",
+      "retain": { "mode": "decision" },
+    },
+    { "id": "scratch", "bankId": "scratch-bank", "retain": { "mode": "explicit-only" } },
+  ],
+}
+```
+
+| Field            | Meaning                                                                                                                           |
+| ---------------- | --------------------------------------------------------------------------------------------------------------------------------- |
+| `retain.enabled` | Defaults to `true`. `false` keeps the entry out of automatic writes entirely.                                                     |
+| `retain.mode`    | `always`, `decision`, or `explicit-only`. Defaults to `always` on the coding-role entry and `explicit-only` on every other entry. |
+
+- `always` — the entry is written on every retain turn.
+- `decision` — the entry is offered to the decision layer, which answers one question per entry.
+  This is the only mode that makes the decision model decide anything about writes.
+- `explicit-only` — the entry is never written automatically; `hindsight_retain` and
+  `hindsight_retain_global` can still write it.
+
+Write candidates are entries that are `enabled`, are not `access: "read"`, are not
+`retain.enabled: false`, and are not `explicit-only`. The coding-role entry (the `project` alias, the
+`project` id, or the first entry) always writes to the derived project bank; every other entry needs
+its own `bankId` and is skipped when it has none.
+
+A config with no `decision` entry never calls the decision model: routing stays exactly the
+pre-decision behavior, with no extra call and no added latency. When a `decision` entry exists and
+the model cannot answer (disabled, no model, timeout, backend failure), those entries fall back to
+`decision.fallback.retainBanks`, then `banksFallback`, filtered to entries that still qualify as
+write candidates. `always` entries are written either way. If nothing is left to write, that turn's
+transcript is not written anywhere: the retain cursor still advances past it and the skip is
+reported — a notification, and a `phase: "retain"` telemetry event carrying the reason and any
+refused bank ids.
+
+**Legacy `userRetain.mode` / `globalRetain.mode`.** The field is single-valued (`explicit-only`)
+today; it is mapped onto the user entry's `retain.mode` at load time, so an old config keeps
+expressing the User Bank write mode in the new place. An entry that states its own mode wins.
 
 ## Isolated bank naming
 
@@ -338,10 +388,11 @@ writable through `hindsight_config`.
 
 ## Decision layer (`decision`)
 
-Optional model-driven bank routing. When enabled, one extra model call per turn answers a small
-question table: whether the turn injects recall, and for every offered bank whether recall reads
-it and whether retain writes to it. Recall and retain then use that routing instead of a fixed
-bank list.
+Optional model-driven bank routing. When enabled, the model answers a small question table: whether
+the turn injects recall, and for every offered bank whether recall reads it and whether retain
+writes to it. Recall and retain then use that routing instead of a fixed bank list. Each path makes
+its own call with the candidates it can route to — recall at the context hook with the readable
+banks, retain at agent end with the write candidates — and each call is cached on its own.
 
 ```jsonc
 {
@@ -364,7 +415,7 @@ bank list.
 | `maxTokens`                            | Answer budget for backends that accept one.                                                                                                                 |
 | `timeoutMs`                            | Per-attempt budget. A backend that exceeds it is abandoned and the next one is tried.                                                                       |
 | `maxContextChars`                      | Budget for the recent-activity part of the prompt. The last user message and the task state are always included.                                            |
-| `cacheTtlMs`                           | Reuse window for a decision, keyed by the offered bank ids and the last user message content.                                                               |
+| `cacheTtlMs`                           | Reuse window for a decision, keyed by the offered bank ids (tagged per path) and the last user message content.                                             |
 | `fallback.recallBanks` / `retainBanks` | Bank ids used when no backend answers. Empty means the top-level `banksFallback` list. Unknown ids are dropped at load time.                                |
 
 **Context.** The prompt carries the last user message, the host task state (`unknown` when it
@@ -373,13 +424,15 @@ bank with its `access` and `description`.
 
 **Routing rules.** Only enabled, access-compatible banks are offered: read routing skips `write`
 entries, write routing skips `read` entries, and a bank id the model returns that was not offered
-is dropped.
+is dropped. Write routing only offers entries in `retain.mode: "decision"` (see **Automatic retain
+modes** above).
 
 **Degradation.** The layer tries backends in order — a host-native judgment surface, a host
 classifier, then a text bridge over any chat model — and ends at the fallback banks. It keeps
 recall on and never raises into the calling turn, so an unreachable decision model costs routing
 quality instead of memory.
 
-**Status.** Automatic recall is wired: `recall.mode: "decision"` reads gate A and
-`recall.bankMode: "decision"` reads gate B. Automatic retain still selects its own banks, so the
-write half of the table above is not user-visible yet.
+**Status.** Both halves are wired: `recall.mode: "decision"` reads gate A, `recall.bankMode:
+"decision"` reads gate B, and `banks[].retain.mode: "decision"` reads the write half of the table
+for that entry. Entries in `always` or `explicit-only` mode never reach the model, so a config with
+no `decision` entry makes no decision call at all.
