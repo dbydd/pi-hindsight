@@ -12,7 +12,14 @@ import {
   type TextBackendLike,
   type TextCompletePort,
 } from "./text-bridge.js";
-import type { DecisionBackend, DecisionHost, DecisionModelRef, HostKind } from "./types.js";
+import { readOmpTodoState, readPiTodoState, UNKNOWN_TODO, type OmpTodoPort } from "./todo-state.js";
+import type {
+  DecisionBackend,
+  DecisionHost,
+  DecisionModelRef,
+  HostKind,
+  TodoState,
+} from "./types.js";
 
 /**
  * Host adapters: the only place that knows how a host resolves models and which
@@ -74,6 +81,21 @@ export function hostModelRef(model: unknown): DecisionModelRef | undefined {
   return provider && modelId ? { provider, modelId } : undefined;
 }
 
+/**
+ * omp's model query facade, read structurally: pi ships no `models` field on its
+ * context and the value is host-provided, so the shape is narrowed, not asserted.
+ */
+export function hostModelsFacade(
+  ctx: unknown,
+): { resolve?: (spec: string) => unknown } | undefined {
+  if (!isRecord(ctx)) return undefined;
+  const models = ctx.models;
+  if (!isRecord(models) || typeof models.resolve !== "function") return undefined;
+  // `typeof` narrows to `Function`; the host declares a spec-in/unknown-out port.
+  const resolve = models.resolve as (spec: string) => unknown;
+  return { resolve };
+}
+
 const OMP_JUDGMENT_SPECIFIERS = [
   "@oh-my-pi/pi-ai/judgment",
   "@oh-my-pi/pi-ai",
@@ -117,12 +139,66 @@ export function createDecisionHost(input: CreateDecisionHostInput): DecisionHost
   const kind = detectHostKind(input.ctx);
   if (kind === "omp" && input.ctx) return createOmpHost({ ...input, ctx: input.ctx });
   if (kind === "pi" && input.ctx) return createPiHost(input.ctx);
+  return degradedDecisionHost();
+}
+
+/**
+ * Host that can never answer: no model, no rung. The decision layer then ends at
+ * its own fallback banks, so a host that cannot be built costs routing quality
+ * instead of the turn's memory.
+ */
+export function degradedDecisionHost(): DecisionHost {
   return {
     kind: "unknown",
     roles: false,
     resolveRole: () => undefined,
     backends: () => [],
   };
+}
+
+export interface CreateRuntimeDecisionHostInput {
+  /** Live extension-context surfaces; absent before a session starts. */
+  ctx?: DecisionHostContext;
+  sessionId?: string;
+}
+
+/**
+ * Build the host adapter for the running process. The omp judgment surface lives
+ * behind a computed specifier (a pi tree ships no `@oh-my-pi/*`), so this is
+ * async; a failed load or lookup degrades instead of throwing into session start.
+ */
+export async function createRuntimeDecisionHost(
+  input: CreateRuntimeDecisionHostInput = {},
+): Promise<DecisionHost> {
+  try {
+    const runtime = await loadOmpJudgmentRuntime();
+    return createDecisionHost({
+      ...(input.ctx ? { ctx: input.ctx } : {}),
+      ...(runtime ? { runtime } : {}),
+      ...(input.sessionId ? { sessionId: input.sessionId } : {}),
+    });
+  } catch {
+    return degradedDecisionHost();
+  }
+}
+
+/**
+ * Task-state reader for the decision prompt. omp answers the todo plugin's read
+ * event synchronously; pi keeps the same snapshot in session entries, so a host
+ * whose plugin did not answer falls through to the branch replay.
+ */
+export function readDecisionTodoState(
+  events: OmpTodoPort | undefined,
+  entries: (() => readonly unknown[]) | undefined,
+): TodoState {
+  const omp = readOmpTodoState(events);
+  if (omp.kind === "ok") return omp;
+  if (!entries) return UNKNOWN_TODO;
+  try {
+    return readPiTodoState(entries());
+  } catch {
+    return UNKNOWN_TODO;
+  }
 }
 
 function createOmpHost(input: {

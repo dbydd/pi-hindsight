@@ -378,6 +378,18 @@ export function normalizeConfig(
         config.recall?.preferObservations,
         DEFAULT_CONFIG.recall.preferObservations,
       ),
+      mode: enumValue(
+        config.recall?.mode,
+        ["every-turn", "decision", "interval", "manual"],
+        DEFAULT_CONFIG.recall.mode,
+      ),
+      bankMode: enumValue(
+        config.recall?.bankMode,
+        ["all", "decision"],
+        DEFAULT_CONFIG.recall.bankMode,
+      ),
+      everyNTurns: positiveInt(config.recall?.everyNTurns, DEFAULT_CONFIG.recall.everyNTurns),
+      minIntervalMs: positiveInt(config.recall?.minIntervalMs, DEFAULT_CONFIG.recall.minIntervalMs),
       ...(minScores ? { minScores } : {}),
       ...(optionalString(config.recall?.queryTimestamp, DEFAULT_CONFIG.recall.queryTimestamp)
         ? {

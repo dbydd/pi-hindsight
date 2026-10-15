@@ -12,12 +12,14 @@ import { isAbortError } from "../client/timeout.js";
 import { recallForContext } from "./recall.js";
 import { redactError } from "../utils/sanitize.js";
 import { writeLastRecallSnapshot } from "./recall-visibility.js";
-import { selectMemoryScopes } from "../operations/memory-scope.js";
+import { selectMemoryScopes, type MemoryRecallScope } from "../operations/memory-scope.js";
 import {
   getEffectiveSessionMemoryMode,
   readSessionMemoryMeta,
 } from "../utils/session-memory-meta.js";
 import type { HindsightActivity } from "../utils/status.js";
+import type { DecisionLayer } from "../decision/decision.js";
+import type { DecisionBankCandidate } from "../decision/types.js";
 import type { HindsightLikeClient, RecallBlock, RecallFailure, ResolvedConfig } from "../types.js";
 import type { ContextEvent, ContextPatch, RuntimeSnapshot } from "./memory-lifecycle-runtime.js";
 
@@ -34,12 +36,27 @@ export interface RecallTurnPolicyDeps {
   observer?: RetrievalObserver;
   getConfig(): ResolvedConfig;
   getClient(): HindsightLikeClient;
+  /**
+   * Decision layer for `recall.mode: "decision"` and `recall.bankMode: "decision"`.
+   * Absent means those gates degrade to the fixed scope set instead of failing.
+   */
+  getDecisionLayer?: () => DecisionLayer | undefined;
   setMemoryStatus(
     runtime: RuntimeSnapshot,
     activity: RecallStatusActivity,
     memoryCount?: number,
   ): void;
   notify(runtime: RuntimeSnapshot, message: string, level: "info" | "warning"): void;
+}
+
+/** `recall.mode: "interval"` state; one per policy instance, so one per session. */
+interface RecallIntervalState {
+  /** Context hooks seen since this policy was created. */
+  turns: number;
+  /** Turn index of the last recall a server answered; undefined before the first. */
+  lastRecallTurn: number | undefined;
+  /** Start time of the last recall a server answered; undefined before the first. */
+  lastRecallAt: number | undefined;
 }
 
 interface RecallCacheEntry {
@@ -115,9 +132,41 @@ function patchWithRecallMessage(
   return undefined;
 }
 
+/** Both interval gates must be exhausted: enough turns, and enough elapsed time. */
+function intervalDue(
+  state: RecallIntervalState,
+  recall: ResolvedConfig["recall"],
+  now: number,
+): boolean {
+  const turnsSince =
+    state.lastRecallTurn === undefined ? state.turns : state.turns - state.lastRecallTurn;
+  if (turnsSince < recall.everyNTurns) return false;
+  return state.lastRecallAt === undefined || now - state.lastRecallAt >= recall.minIntervalMs;
+}
+
+/** Read candidates mirror the scope set, so a bank the model picks always yields a scope. */
+function readBankCandidates(
+  scopes: readonly MemoryRecallScope[],
+  config: ResolvedConfig,
+): DecisionBankCandidate[] {
+  return scopes.map((scope) => {
+    const entry = config.banks.find((candidate) => candidate.id === scope.entryId);
+    return {
+      id: scope.entryId,
+      access: entry?.access ?? "read-write",
+      ...(entry?.description ? { description: entry.description } : {}),
+    };
+  });
+}
+
 export function createRecallTurnPolicy(deps: RecallTurnPolicyDeps): RecallTurnPolicy {
   const cache = createRecallCache(() => deps.getConfig().recall.cacheTtlMs);
   const origins = new WeakMap<RecallCacheEntry, RetrievalTelemetry[]>();
+  const interval: RecallIntervalState = {
+    turns: 0,
+    lastRecallTurn: undefined,
+    lastRecallAt: undefined,
+  };
   return {
     async recall(event: ContextEvent, runtime: RuntimeSnapshot): Promise<ContextPatch | undefined> {
       const started = Date.now();
@@ -158,11 +207,17 @@ export function createRecallTurnPolicy(deps: RecallTurnPolicyDeps): RecallTurnPo
       };
       const config = deps.getConfig();
       if (!config.enabled || !config.recall.enabled) return skip("disabled");
+      if (config.recall.mode === "manual") return skip("manual");
 
       const sessionMemory = getEffectiveSessionMemoryMode(
         await readSessionMemoryMeta(runtime.cwd, runtime.sessionFile),
       );
       if (!sessionMemory.recall) return skip("session-disabled");
+
+      interval.turns += 1;
+      if (config.recall.mode === "interval" && !intervalDue(interval, config.recall, Date.now())) {
+        return skip("interval");
+      }
 
       const scopes = selectMemoryScopes(runtime.cwd, config);
       if (scopes.length === 0) return skip("no-scopes");
@@ -170,18 +225,46 @@ export function createRecallTurnPolicy(deps: RecallTurnPolicyDeps): RecallTurnPo
         return skip("append-requires-user");
       }
 
-      const cacheKey = recallTurnCacheKey(
-        scopes.map((s) => s.bankId),
-        event.messages,
-      );
-      let recallResult = cache.get(cacheKey);
-      cacheStatus = recallResult ? "hit" : "miss";
-
+      let recallResult: RecallCacheEntry | undefined;
       try {
         if (runtime.signal?.aborted) {
           deps.setMemoryStatus(runtime, "idle");
           return skip("aborted");
         }
+
+        // One decision call covers both gates: whether this turn injects, and which
+        // read banks the turn uses. Each gate is honored only by the mode that asked
+        // for it, and a missing layer leaves the fixed scope set in place — routing
+        // quality is what a broken decision costs, never the turn's memory.
+        let readScopes = scopes;
+        const layer =
+          config.recall.mode === "decision" || config.recall.bankMode === "decision"
+            ? deps.getDecisionLayer?.()
+            : undefined;
+        if (layer) {
+          const decision = await layer.decide({
+            messages: event.messages,
+            readCandidates: readBankCandidates(scopes, config),
+            // Retain routing is not part of the recall path.
+            writeCandidates: [],
+            ...(runtime.signal ? { signal: runtime.signal } : {}),
+          });
+          if (config.recall.mode === "decision" && !decision.inject) {
+            return skip("decision-no-inject");
+          }
+          if (config.recall.bankMode === "decision") {
+            const selected = new Set(decision.readBanks);
+            readScopes = scopes.filter((scope) => selected.has(scope.entryId));
+            if (readScopes.length === 0) return skip("decision-no-banks");
+          }
+        }
+
+        const cacheKey = recallTurnCacheKey(
+          readScopes.map((s) => s.bankId),
+          event.messages,
+        );
+        recallResult = cache.get(cacheKey);
+        cacheStatus = recallResult ? "hit" : "miss";
         if (recallResult && deps.observer) {
           for (const origin of origins.get(recallResult) ?? []) {
             emitRetrieval(observe, () =>
@@ -206,7 +289,7 @@ export function createRecallTurnPolicy(deps: RecallTurnPolicyDeps): RecallTurnPo
           const fetched = await recallForContext({
             client: deps.getClient(),
             config,
-            scopes,
+            scopes: readScopes,
             messages: event.messages,
             cwd: runtime.cwd,
             ...(deps.observer ? { observer: observe, contextId } : {}),
@@ -225,6 +308,12 @@ export function createRecallTurnPolicy(deps: RecallTurnPolicyDeps): RecallTurnPo
           return skip("aborted");
         }
         const { rendered, blocks, failed, failures, timestamp } = recallResult;
+        // Both interval gates measure from the last turn a server answered, whether
+        // it was served fresh or from the turn cache.
+        if (config.recall.mode === "interval" && failed === 0) {
+          interval.lastRecallTurn = interval.turns;
+          interval.lastRecallAt = Date.now();
+        }
         const memoryCount = blocks.reduce((count, block) => count + block.memoryCount, 0);
         deps.setMemoryStatus(
           runtime,
