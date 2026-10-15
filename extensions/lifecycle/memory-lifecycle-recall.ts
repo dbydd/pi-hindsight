@@ -303,7 +303,8 @@ export function createRecallTurnPolicy(deps: RecallTurnPolicyDeps): RecallTurnPo
         // Recall runs every turn, so this stays debug-gated behind the same opt-in flags that
         // already gate the last-recall sidecar, instead of notifying (which would spam normal
         // usage). Users who enabled storeLastRecall + storeLastRecallFailures can inspect the
-        // redacted cause via the opt-in last-recall sidecar under .pi/hindsight/.
+        // redacted cause via the opt-in last-recall sidecar under the project state dir
+        // (config.recall.lastRecallPath).
         if (config.recall.storeLastRecall && config.recall.storeLastRecallFailures) {
           try {
             await writeLastRecallSnapshot(runtime.cwd, config.recall.lastRecallPath, {

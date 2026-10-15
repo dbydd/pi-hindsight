@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import type { AgentMessage } from "@earendil-works/pi-agent-core";
+import { projectStateDir } from "../config/paths.js";
 
 export const RETAIN_CURSOR_VERSION = 3 as const;
 export const RETAIN_CURSOR_TAIL_WINDOW = 200;
@@ -42,7 +43,7 @@ interface SessionRetainCursorV2 {
 }
 
 export function retainCursorPath(cwd: string): string {
-  return join(cwd, ".pi", "hindsight", "retain-cursors.json");
+  return join(projectStateDir(cwd), "retain-cursors.json");
 }
 
 export function messageFingerprint(message: AgentMessage): string {

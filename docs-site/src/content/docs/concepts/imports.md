@@ -15,7 +15,7 @@ The `/hindsight` guided setup flow can offer import after bank/template setup an
 
 Import builds deterministic source documents, sends them through Retain, and records local checkpoint/manifest state. The retained content is filtered structured source evidence, not a summary.
 
-Default files:
+Default files (Pi's host config dir; `.omp/hindsight/` under omp):
 
 ```text
 .pi/hindsight/import-manifest.json

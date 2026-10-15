@@ -1,4 +1,5 @@
 import type { ResolvedConfig } from "../types.js";
+import { hostConfigDirName } from "../config/paths.js";
 import {
   bankEntryEnabled,
   bankMissionSettings,
@@ -201,8 +202,7 @@ export function formatDebugReport(args: DebugReportArgs): string {
         globalConfigured: Object.keys(bankMissionSettings(userEntry)).length > 0,
       },
       observations: observationScopes,
-      overrideProjectBankId:
-        "Set PI_HINDSIGHT_PROJECT_BANK_ID or the coding bank's bankId in .pi/hindsight.json",
+      overrideProjectBankId: `Set PI_HINDSIGHT_PROJECT_BANK_ID or the coding bank's bankId in ${hostConfigDirName()}/hindsight.json`,
       globalBankId: userEnabled ? (userEntry?.bankId ?? null) : null,
       memoryRoutes: {
         recall: [

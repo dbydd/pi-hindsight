@@ -72,7 +72,7 @@ body:
     id: config
     attributes:
       label: Relevant config
-      description: Paste relevant `.pi/hindsight.json` or env details with secrets redacted.
+      description: Paste relevant project hindsight config (`.pi/hindsight.json`, or `.omp/hindsight.json` under omp) or env details with secrets redacted.
       render: json
   - type: checkboxes
     id: safety

@@ -94,7 +94,7 @@ Exact field names and env wiring: [Configuration](/pi-hindsight/reference/config
 
 ## Last-recall snapshots
 
-Set `recall.storeLastRecall: true` to write a local visibility snapshot under `.pi/hindsight/` for debugging. Add `recall.storeLastRecallFailures: true` to include failed recall attempts when all recalls fail.
+Set `recall.storeLastRecall: true` to write a local visibility snapshot under the host's state dir (`.pi/hindsight/` under Pi, `.omp/hindsight/` under omp) for debugging. Add `recall.storeLastRecallFailures: true` to include failed recall attempts when all recalls fail.
 
 Snapshots can contain recalled memory and query excerpts. Enable them only when local disk visibility is acceptable. Snapshots are not inserted into provider context or automatic retain. There is no public slash command for last-recall; inspect the sidecar file on disk. Cancelled (Esc) recalls do not write success or failure snapshots; an in-progress temp write is discarded so an existing snapshot stays in place.
 

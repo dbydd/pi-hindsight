@@ -44,6 +44,6 @@ From the TUI:
 - remove selected config overrides
 - inspect deployment setup fields
 
-From the hub: press `f` to flush the retain queue, `i` for import, `o` for doctor. Last-recall debug snapshots are opt-in local files under `.pi/hindsight/` when `recall.storeLastRecall` is enabled.
+From the hub: press `f` to flush the retain queue, `i` for import, `o` for doctor. Last-recall debug snapshots are opt-in local files under the host's state dir (`.pi/hindsight/` under Pi, `.omp/hindsight/` under omp) when `recall.storeLastRecall` is enabled.
 
 For first-time imports, prefer guided setup's dry-run-first import prompt. For later imports, see [Importing sessions](./importing-sessions/). See [Tools and commands](../reference/tools-and-commands/) for the public surface.

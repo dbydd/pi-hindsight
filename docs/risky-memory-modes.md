@@ -34,7 +34,7 @@ Risks:
 Safe alternative:
 
 - Keep recall ephemeral by default.
-- Use `recall.storeLastRecall` to write the latest recall snapshot to a local sidecar file under `.pi/hindsight/`.
+- Use `recall.storeLastRecall` to write the latest recall snapshot to a local sidecar file under the host's state dir (`.pi/hindsight/` under Pi, `.omp/hindsight/` under omp).
 - Inspect that sidecar on disk when debugging; there is no public last-recall slash command.
 
 Design rule:
