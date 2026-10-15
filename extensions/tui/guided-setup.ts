@@ -1,5 +1,6 @@
 import { existsSync } from "node:fs";
 import { join } from "node:path";
+import { hostConfigDirName } from "../config/paths.js";
 import type { ExtensionCommandContext } from "@earendil-works/pi-coding-agent";
 import {
   bankEntryEnabled,
@@ -35,8 +36,8 @@ import { ensureServerConnectionForSetup } from "./setup-server-probe.js";
 
 export function hasProjectHindsightConfig(cwd: string): boolean {
   return (
-    existsSync(join(cwd, ".pi", "hindsight.json")) ||
-    existsSync(join(cwd, ".pi", "hindsight.jsonc"))
+    existsSync(join(cwd, hostConfigDirName(), "hindsight.json")) ||
+    existsSync(join(cwd, hostConfigDirName(), "hindsight.jsonc"))
   );
 }
 

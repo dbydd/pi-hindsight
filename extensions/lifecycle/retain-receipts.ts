@@ -1,6 +1,7 @@
 import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 import { redactSecrets } from "../utils/sanitize.js";
+import { projectStateDir } from "../config/paths.js";
 import type { RetainOutcome, UpdateMode } from "../types.js";
 
 export interface RetainReceipt {
@@ -24,7 +25,7 @@ const MAX_RECEIPTS = 50;
 const MAX_RECEIPT_CONTEXT_CHARS = 1000;
 
 export function retainReceiptsPath(cwd: string): string {
-  return resolve(cwd, ".pi/hindsight/retain-receipts.json");
+  return resolve(projectStateDir(cwd), "retain-receipts.json");
 }
 
 function emptyHistory(): RetainReceiptHistory {

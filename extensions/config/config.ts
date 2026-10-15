@@ -1,10 +1,10 @@
 import { copyFileSync, existsSync, readFileSync, writeFileSync } from "node:fs";
-import { join } from "node:path";
 import { parse, printParseErrorCode, type ParseError } from "jsonc-parser";
 import type { ResolvedConfig } from "../types.js";
 import { DEFAULT_CONFIG } from "./config-defaults.js";
 import { envBool, isRecord, merge, normalizeConfig, validEnvVarName } from "./config-normalize.js";
 import { mergeBankEntries } from "./banks.js";
+import { globalConfigBasePath, projectConfigBasePath } from "./paths.js";
 import type { BankConfigEntry } from "../types.js";
 
 export { DEFAULT_CONFIG } from "./config-defaults.js";
@@ -103,10 +103,10 @@ export function migrateUserMemoryConfigFiles(
   env: NodeJS.ProcessEnv = process.env,
 ): ConfigMigrationResult[] {
   const results: ConfigMigrationResult[] = [];
-  const home = env.HOME;
+  const globalBase = globalConfigBasePath(env);
   const paths = [
-    home ? configPath(join(home, ".pi", "agent", "hindsight")) : undefined,
-    configPath(join(cwd, ".pi", "hindsight")),
+    globalBase === undefined ? undefined : configPath(globalBase),
+    configPath(projectConfigBasePath(cwd)),
   ].filter((path): path is string => Boolean(path));
   const now = new Date();
   for (const path of paths) {
@@ -164,9 +164,9 @@ export function resolveConfig(cwd: string, env: NodeJS.ProcessEnv = process.env)
   // Banks merge by `id` across layers; `banksFallback` is replaced by the last layer.
   let banks: unknown = DEFAULT_CONFIG.banks;
   let banksFallback: unknown;
-  const home = env.HOME;
-  const homeConfig = home ? readConfigFile(join(home, ".pi", "agent", "hindsight")) : undefined;
-  const projectConfig = readConfigFile(join(cwd, ".pi", "hindsight"));
+  const globalBase = globalConfigBasePath(env);
+  const homeConfig = globalBase === undefined ? undefined : readConfigFile(globalBase);
+  const projectConfig = readConfigFile(projectConfigBasePath(cwd));
   let config = merge(DEFAULT_CONFIG, homeConfig);
   config = merge(config, projectConfig);
   for (const layer of [homeConfig, projectConfig]) {

@@ -8,13 +8,21 @@ Pi Hindsight resolves configuration from defaults, global config, project config
 
 Config is loaded from:
 
-1. `~/.pi/agent/hindsight.json` or `~/.pi/agent/hindsight.jsonc`
-2. `.pi/hindsight.json` or `.pi/hindsight.jsonc` in the current repo
+1. `~/.pi/agent/hindsight.json` or `.jsonc` under Pi; `~/.omp/agent/hindsight.json` or `.jsonc` under omp
+2. `hindsight.json` or `hindsight.jsonc` in the host's project config dir (`.pi` under Pi, `.omp` under omp)
 3. environment variables
 
 If both `.json` and `.jsonc` exist at the same scope, `.json` wins. Config is normalized after merging. Unknown fields are ignored, and invalid values fall back to defaults.
 
 Environment variables win the effective value. Project/user stored values can still be edited for future runs after the environment override is removed.
+
+## Host config paths
+
+The extension asks the running host where its config directory is rather than hardcoding `.pi`:
+
+- **Global agent dir** — `~/.pi/agent` under Pi, `~/.omp/agent` under omp. `PI_CODING_AGENT_DIR` overrides it.
+- **Project config dir** — `.pi` under Pi, `.omp` under omp. `PI_CONFIG_DIR` overrides it; `.pi` is also the last-resort fallback when the host reports no directory name.
+- **Project state dir** — `<project config dir>/hindsight`. `recall.lastRecallPath`, `retain.queuePath`, `import.manifestPath`, and `import.checkpointPath` all default inside it, so sidecars, queues, cursors, receipts, and import checkpoints follow the same host.
 
 ## Common environment variables
 
@@ -53,7 +61,7 @@ Project config SecretRef shape:
 - **User Only**: project bank disabled; user bank enabled from global Pi config.
 - **Recall Only**: automatic recall enabled; automatic retain disabled; explicit tools and imports remain available.
 
-When a profile uses user memory, guided setup asks for a user bank ID and writes it to global Pi config. Override it later with `PI_HINDSIGHT_USER_BANK_ID`, the `user`-alias entry's `bankId` in `~/.pi/agent/hindsight.json`, or the setup TUI if you prefer a different shared bank. Legacy `PI_HINDSIGHT_GLOBAL_BANK_ID`, `banks.global`, and `global-only` config names are migrated/supported during transition.
+When a profile uses user memory, guided setup asks for a user bank ID and writes it to global Pi config. Override it later with `PI_HINDSIGHT_USER_BANK_ID`, the `user`-alias entry's `bankId` in the global hindsight config (`~/.pi/agent/hindsight.json` under Pi, `~/.omp/agent/hindsight.json` under omp), or the setup TUI if you prefer a different shared bank. Legacy `PI_HINDSIGHT_GLOBAL_BANK_ID`, `banks.global`, and `global-only` config names are migrated/supported during transition.
 
 ## Bank list (`banks`)
 
@@ -134,6 +142,8 @@ Deployment choices cover Hindsight Cloud, an existing local/external API, and lo
 ## Advanced project config example
 
 Bank missions are intentionally absent from this JSON example. Hindsight bank configuration/database is the source of truth for retain, reflect, and observation mission text; Pi JSON should only select banks and extension behavior. Existing mission fields in older configs are treated as legacy fallbacks.
+
+Paths below are Pi's resolved defaults; see [Host config paths](#host-config-paths).
 
 ```json
 {

@@ -78,7 +78,7 @@ Changing chunking or another document-ID namespace input creates a new determini
 3. clear or move checkpoint/manifest only when you want a fresh import namespace
 4. flush or clear stale queued retain jobs before reimporting if old IDs should not deliver later
 
-Default files:
+Default files (Pi's host config dir; `.omp/hindsight/` under omp):
 
 ```text
 .pi/hindsight/import-manifest.json

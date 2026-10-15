@@ -11,6 +11,8 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { resolveConfig } from "../extensions/config/config.js";
 import { codingBankEntry, userBankEntry } from "../extensions/config/banks.js";
+import { DEFAULT_CONFIG } from "../extensions/config/config-defaults.js";
+import { hostConfigDirName } from "../extensions/config/paths.js";
 
 function tmp() {
   return mkdtempSync(join(tmpdir(), "pi-hindsight-"));
@@ -614,5 +616,26 @@ describe("resolveConfig", () => {
       JSON.stringify({ scope: { userScopeTags: "harness:pi" } }),
     );
     expect(resolveConfig(cwd).scope.userScopeTags).toEqual(["source:pi", "harness:pi"]);
+  });
+
+  it("reads the global config from the home named by the env, not the process home", () => {
+    const cwd = tmp();
+    const home = tmp();
+    const agentDir = join(home, hostConfigDirName(), "agent");
+    mkdirSync(agentDir, { recursive: true });
+    writeFileSync(join(agentDir, "hindsight.json"), JSON.stringify({ recall: { maxTokens: 321 } }));
+    expect(resolveConfig(cwd, { HOME: home }).recall.maxTokens).toBe(321);
+  });
+
+  it("reads the global config from PI_CODING_AGENT_DIR when the host exports one", () => {
+    const cwd = tmp();
+    const agentDir = tmp();
+    writeFileSync(join(agentDir, "hindsight.json"), JSON.stringify({ recall: { maxTokens: 654 } }));
+    expect(resolveConfig(cwd, { PI_CODING_AGENT_DIR: agentDir }).recall.maxTokens).toBe(654);
+  });
+
+  it("skips the global layer when the injected env names no config location", () => {
+    const cwd = tmp();
+    expect(resolveConfig(cwd, {}).recall.maxTokens).toBe(DEFAULT_CONFIG.recall.maxTokens);
   });
 });

@@ -8,7 +8,7 @@ Upgrading from older path-bank installs: see [Upgrading to domain banks](/pi-hin
 
 ## Resolution order
 
-1. **Pin** — `scope.projectId` in `.pi/hindsight.json` or global config
+1. **Pin** — `scope.projectId` in the project config (`.pi/hindsight.json` under Pi, `.omp/hindsight.json` under omp) or global config
 2. **Git remote** — normalized `origin` URL (default strategy)
 3. **Basename** — git root folder name (fallback, or when `scope.projectIdStrategy` is `"basename"`)
 
