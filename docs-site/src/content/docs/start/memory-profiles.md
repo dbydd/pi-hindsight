@@ -21,7 +21,7 @@ Same as **Coding**, plus an optional **Life / User bank** for durable personal m
 
 - Recall can read both banks (separate token budgets)
 - Automatic retain still **only** hits the coding bank
-- Life writes stay explicit (`hindsight_retain_global` / hub)
+- Life writes stay explicit (`hindsight_retain_user` / hub)
 
 ## Isolated project
 

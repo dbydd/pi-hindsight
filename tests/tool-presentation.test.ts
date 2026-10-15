@@ -21,19 +21,35 @@ const RESIDENT_TOOLS = [
 ];
 
 /**
- * Cold path on both hosts. The seven deliberate cold-path tools plus
- * `hindsight_retain_global`, which reaches the cold path through the unknown-name
- * default (it has no resident entry).
+ * Cold path on both hosts: the explicit-memory tools and the split
+ * config/bank/mental-model/knowledge-page families. None of them has a resident
+ * entry, so they reach the cold path through the unknown-name default.
  */
 const COLD_PATH_TOOLS = [
-  "hindsight_retain_global",
+  "hindsight_retain_user",
   "hindsight_seed_git",
   "hindsight_scope",
-  "hindsight_config",
-  "hindsight_bank",
-  "hindsight_mental_model",
-  "hindsight_knowledge",
   "hindsight_scope_migrate",
+  "hindsight_config_get",
+  "hindsight_config_set",
+  "hindsight_bank_list",
+  "hindsight_bank_get",
+  "hindsight_bank_set_mission",
+  "hindsight_mm_list",
+  "hindsight_mm_get",
+  "hindsight_mm_create",
+  "hindsight_mm_update",
+  "hindsight_mm_refresh",
+  "hindsight_mm_delete",
+  "hindsight_kb_tree",
+  "hindsight_kb_search",
+  "hindsight_kb_get",
+  "hindsight_kb_create_page",
+  "hindsight_kb_create_folder",
+  "hindsight_kb_update",
+  "hindsight_kb_delete",
+  "hindsight_kb_seed_taxonomy",
+  "hindsight_kb_export",
 ];
 
 /** The exposure marks are host runtime keys the installed Pi `ToolDefinition` does not declare. */
@@ -82,7 +98,7 @@ describe("tool presentation marks", () => {
 
   it("defaults an unknown tool name to the cold path", () => {
     expect(toolPresentation("hindsight_recall")).toEqual(RESIDENT_MARKS);
-    expect(toolPresentation("hindsight_bank")).toEqual(COLD_PATH_MARKS);
+    expect(toolPresentation("hindsight_bank_get")).toEqual(COLD_PATH_MARKS);
     expect(toolPresentation("hindsight_some_future_tool")).toEqual(COLD_PATH_MARKS);
   });
 

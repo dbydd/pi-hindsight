@@ -32,13 +32,14 @@ export interface ToolPresentation {
  * Tools the agent reaches for every turn; kept on the top-level surface.
  *
  * Everything else is the cold path — `discoverable` under omp, `deferred` under pi.
- * That covers the seven deliberate cold-path tools (`hindsight_seed_git`,
- * `hindsight_scope`, `hindsight_config`, `hindsight_bank`, `hindsight_mental_model`,
- * `hindsight_knowledge`, `hindsight_scope_migrate`) and any tool added later without a
- * resident entry here, so a new tool lands cold-path (the safe default) rather than
- * silently taking over the top-level surface. The catalog-surface test in
- * `tests/operation-catalog.test.ts` keeps the registered name set pinned, so an
- * unintended addition shows up as a diff instead of hiding behind this default.
+ * That covers the explicit-memory tools (`hindsight_retain_user`,
+ * `hindsight_seed_git`, `hindsight_scope`, `hindsight_scope_migrate`, the
+ * `hindsight_config_*`, `hindsight_bank_*`, `hindsight_mm_*`, and `hindsight_kb_*`
+ * families) and any tool added later without a resident entry here, so a new tool
+ * lands cold-path (the safe default) rather than silently taking over the top-level
+ * surface. The catalog-surface test in `tests/operation-catalog.test.ts` keeps the
+ * registered name set pinned, so an unintended addition shows up as a diff instead
+ * of hiding behind this default.
  */
 export const RESIDENT_TOOL_NAMES: readonly string[] = [
   "hindsight_recall",

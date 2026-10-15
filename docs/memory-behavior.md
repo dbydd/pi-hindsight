@@ -138,7 +138,7 @@ Defaults keep user/assistant text, assistant tool calls, tool result errors, and
 
 Live session retains set the named bank strategy `conversation` (coding project templates define multi-strategy maps: `git`, `gitlog`, `conversation`, `document`, `survey`, plus knowledge `entity_labels` for page routing). Default bank mission text prefers final-state-wins extraction when a conversation amends itself.
 
-Applying the `pi-coding-project` bank template (or `hindsight_knowledge` action `seed_taxonomy`) idempotently seeds a fixed five-page knowledge taxonomy tagged `knowledge:component|concept|convention|decision|feature-work`. When the client/server lacks knowledge-base APIs, seeding returns `knowledge_pages_unavailable` and does not fail template apply.
+Applying the `pi-coding-project` bank template (or `hindsight_kb_seed_taxonomy`) idempotently seeds a fixed five-page knowledge taxonomy tagged `knowledge:component|concept|convention|decision|feature-work`. When the client/server lacks knowledge-base APIs, seeding returns `knowledge_pages_unavailable` and does not fail template apply.
 
 Opt-in cold-repo git seed: `hindsight_seed_git` retains recent commit messages (strategy `gitlog`, stable `pi-gitlog:<head>` document ids) without replacing live session retain. It is never automatic on session start. `hindsight_status` and doctor include a `sync` readiness block (queue depth, git seed receipt, knowledge-page capability).
 
@@ -209,6 +209,6 @@ to the Project Bank only — the User Bank joins automatic retain only when its 
 `always` or `decision`. `globalRetain.mode`/`userRetain.mode` is single-valued (`explicit-only`)
 and maps onto the user entry's mode.
 
-`hindsight_retain_global` is the preferred tool for durable global user identity, preferences, and cross-project workflows.
+`hindsight_retain_user` is the preferred tool for durable global user identity, preferences, and cross-project workflows.
 
 ADR 004 removed the heuristic memory router that used to classify retain candidates as `project`, `global`, `both`, or `skip`; ADR 002 documents the explicit routing strategy seam it superseded.

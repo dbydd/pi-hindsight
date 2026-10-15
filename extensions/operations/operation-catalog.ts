@@ -145,6 +145,39 @@ export type CommandOperation = {
   spec: Parameters<ExtensionAPI["registerCommand"]>[1];
 };
 
+/**
+ * The split tools carry only the parameters their single operation needs, so the
+ * snippets several of them share are built here instead of being copied per tool.
+ */
+function bankParameter() {
+  return Type.Optional(
+    Type.String({
+      description: "Bank id or alias project|user|global. Defaults to the coding/project bank.",
+    }),
+  );
+}
+
+/** Change-making tools default this to true in their handler. */
+function dryRunParameter(description: string) {
+  return Type.Optional(Type.Boolean({ description }));
+}
+
+function tagsParameter(description: string) {
+  return Type.Optional(Type.Array(Type.String(), { description }));
+}
+
+function maxTokensParameter(description: string) {
+  return Type.Optional(Type.Integer({ minimum: 1, description }));
+}
+
+function parentIdParameter() {
+  return Type.Optional(
+    Type.Union([Type.String(), Type.Null()], {
+      description: "Folder parent. Omit for root create; pass null on update to move to root.",
+    }),
+  );
+}
+
 export interface OperationCatalog {
   tools: ToolOperation[];
   commands: CommandOperation[];
@@ -376,10 +409,10 @@ export function createOperationCatalog(deps: MemoryOperationsDeps): OperationCat
       renderResult: renderMemoryToolTextResult,
     }),
     defineCatalogTool({
-      name: "hindsight_retain_global",
+      name: "hindsight_retain_user",
       label: "Hindsight Retain User",
       description:
-        "Retain explicit durable user memory in the configured user bank. Use for stable user identity, preferences, and cross-project workflows only.",
+        "Retain explicit durable user memory in the configured user bank. Use for stable user identity, preferences, and cross-project workflows only — for anything tied to this repository use hindsight_retain instead (hindsight_retain with bank=global reaches the same user bank).",
       parameters: Type.Object({
         content: Type.String({ description: "Raw memory content to retain." }),
         context: Type.String({ description: "Why this memory is durable user context." }),
@@ -592,82 +625,93 @@ export function createOperationCatalog(deps: MemoryOperationsDeps): OperationCat
       renderResult: renderMemoryToolTextResult,
     }),
     defineCatalogTool({
-      name: "hindsight_config",
-      label: "Hindsight Config",
+      name: "hindsight_config_get",
+      label: "Hindsight Config Get",
       description:
-        "Get or patch allowlisted Pi Hindsight config (project or global file). action=get returns effective values (no secrets) and the allowlist. action=patch updates only typed allowlisted keys (setupComplete, scopeMode, projectId, projectIdStrategy, includeSharedObservations, userScopeTags, projectBankId, enableGlobalBank, globalBankId, agentUse, mentalModelsInject, memoryProfile, recall/retain knobs, baseUrl, apiKeyEnvVar, timeoutMs). dryRun defaults true for patch. Domain-tagged setupComplete requires projectBankId. Never pass raw API keys — use apiKeyEnvVar.",
+        "Read the effective allowlisted Pi Hindsight config values plus the allowlist; secrets are never returned. Read-only. Use it before hindsight_config_set to see what a patch would change; hindsight_status covers the setup gate, banks, and sync readiness instead.",
+      parameters: Type.Object({}),
+      async execute(_id, _params, signal, _onUpdate, ctx) {
+        useCwd(ctx.cwd);
+        if (signal?.aborted) throw new Error("Aborted");
+        const operations = await loadOperations();
+        const result = await operations.config({ action: "get", cwd: ctx.cwd });
+        return {
+          content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
+          details: result,
+        };
+      },
+      renderResult: renderMemoryToolTextResult,
+    }),
+    defineCatalogTool({
+      name: "hindsight_config_set",
+      label: "Hindsight Config Set",
+      description:
+        "Patch allowlisted Pi Hindsight config (project or global file) with typed keys only: setupComplete, scopeMode, projectId, projectIdStrategy, includeSharedObservations, userScopeTags, projectBankId, enableGlobalBank, globalBankId, agentUse, mentalModelsInject, memoryProfile, recall/retain knobs, baseUrl, apiKeyEnvVar, timeoutMs. dryRun defaults true (preview) — set false to write. Domain-tagged setupComplete requires projectBankId. Never pass raw API keys — use apiKeyEnvVar. Read current values with hindsight_config_get first.",
       parameters: Type.Object({
-        action: Type.Union([Type.Literal("get"), Type.Literal("patch")]),
-        patch: Type.Optional(
-          Type.Object(
-            {
-              setupComplete: Type.Optional(Type.Boolean()),
-              scopeMode: Type.Optional(
-                Type.Union([Type.Literal("domain-tagged"), Type.Literal("isolated-bank")]),
-              ),
-              projectId: Type.Optional(Type.String({ minLength: 1 })),
-              projectIdStrategy: Type.Optional(
-                Type.Union([Type.Literal("remote"), Type.Literal("basename")]),
-              ),
-              includeSharedObservations: Type.Optional(Type.Boolean()),
-              userScopeTags: Type.Optional(
-                Type.Array(Type.String(), {
-                  description:
-                    "User/life bank recall tags (any_strict). Empty array disables the tag filter. Writes scope.userScopeTags.",
-                }),
-              ),
-              projectBankId: Type.Optional(Type.String({ minLength: 1 })),
-              enableGlobalBank: Type.Optional(Type.Boolean()),
-              globalBankId: Type.Optional(Type.String({ minLength: 1 })),
-              agentUse: Type.Optional(
-                Type.Union([Type.Literal("coding"), Type.Literal("conversation")]),
-              ),
-              mentalModelsInject: Type.Optional(Type.Boolean()),
-              memoryProfile: Type.Optional(
-                Type.Union([
-                  Type.Literal("project-only"),
-                  Type.Literal("project+global"),
-                  Type.Literal("global-only"),
-                  Type.Literal("recall-only"),
-                ]),
-              ),
-              recallEnabled: Type.Optional(Type.Boolean()),
-              recallBudget: Type.Optional(
-                Type.Union([Type.Literal("low"), Type.Literal("mid"), Type.Literal("high")]),
-              ),
-              recallMaxTokens: Type.Optional(Type.Number({ minimum: 0 })),
-              retainEnabled: Type.Optional(Type.Boolean()),
-              baseUrl: Type.Optional(Type.String({ minLength: 1 })),
-              apiKeyEnvVar: Type.Optional(Type.String({ minLength: 1 })),
-              timeoutMs: Type.Optional(Type.Number({ minimum: 0 })),
-            },
-            {
-              additionalProperties: false,
-              description: "Typed allowlisted config fields only (no free-form keys).",
-            },
-          ),
+        patch: Type.Object(
+          {
+            setupComplete: Type.Optional(Type.Boolean()),
+            scopeMode: Type.Optional(
+              Type.Union([Type.Literal("domain-tagged"), Type.Literal("isolated-bank")]),
+            ),
+            projectId: Type.Optional(Type.String({ minLength: 1 })),
+            projectIdStrategy: Type.Optional(
+              Type.Union([Type.Literal("remote"), Type.Literal("basename")]),
+            ),
+            includeSharedObservations: Type.Optional(Type.Boolean()),
+            userScopeTags: Type.Optional(
+              Type.Array(Type.String(), {
+                description:
+                  "User/life bank recall tags (any_strict). Empty array disables the tag filter. Writes scope.userScopeTags.",
+              }),
+            ),
+            projectBankId: Type.Optional(Type.String({ minLength: 1 })),
+            enableGlobalBank: Type.Optional(Type.Boolean()),
+            globalBankId: Type.Optional(Type.String({ minLength: 1 })),
+            agentUse: Type.Optional(
+              Type.Union([Type.Literal("coding"), Type.Literal("conversation")]),
+            ),
+            mentalModelsInject: Type.Optional(Type.Boolean()),
+            memoryProfile: Type.Optional(
+              Type.Union([
+                Type.Literal("project-only"),
+                Type.Literal("project+global"),
+                Type.Literal("global-only"),
+                Type.Literal("recall-only"),
+              ]),
+            ),
+            recallEnabled: Type.Optional(Type.Boolean()),
+            recallBudget: Type.Optional(
+              Type.Union([Type.Literal("low"), Type.Literal("mid"), Type.Literal("high")]),
+            ),
+            recallMaxTokens: Type.Optional(Type.Number({ minimum: 0 })),
+            retainEnabled: Type.Optional(Type.Boolean()),
+            baseUrl: Type.Optional(Type.String({ minLength: 1 })),
+            apiKeyEnvVar: Type.Optional(Type.String({ minLength: 1 })),
+            timeoutMs: Type.Optional(Type.Number({ minimum: 0 })),
+          },
+          {
+            additionalProperties: false,
+            description: "Typed allowlisted config fields only (no free-form keys).",
+          },
         ),
         scope: Type.Optional(
           Type.Union([Type.Literal("project"), Type.Literal("global")], {
             description: `Which config file to write (default project ${hostConfigDirName()}/hindsight.json).`,
           }),
         ),
-        dryRun: Type.Optional(
-          Type.Boolean({
-            description: "When true (default for patch), preview only; set false to write.",
-          }),
-        ),
+        dryRun: dryRunParameter("When true (default), preview only; set false to write."),
       }),
       async execute(_id, params, signal, _onUpdate, ctx) {
         useCwd(ctx.cwd);
         if (signal?.aborted) throw new Error("Aborted");
         const operations = await loadOperations();
         const result = await operations.config({
-          action: params.action,
+          action: "patch",
           cwd: ctx.cwd,
-          ...(params.patch ? { patch: params.patch as Record<string, unknown> } : {}),
+          patch: params.patch as Record<string, unknown>,
           ...(params.scope ? { scope: params.scope } : {}),
-          ...(params.dryRun !== undefined ? { dryRun: params.dryRun } : {}),
+          dryRun: params.dryRun ?? true,
         });
         return {
           content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
@@ -677,37 +721,65 @@ export function createOperationCatalog(deps: MemoryOperationsDeps): OperationCat
       renderResult: renderMemoryToolTextResult,
     }),
     defineCatalogTool({
-      name: "hindsight_bank",
-      label: "Hindsight Bank",
+      name: "hindsight_bank_list",
+      label: "Hindsight Bank List",
       description:
-        "Inspect or update the selected coding/life bank. action=get returns exists/stats/config (list-banks existence; retired /profile is not a hard failure). action=update_mission patches retain/reflect/observations mission (dryRun default true for safety).",
+        "List the banks Pi is configured with (id, bankId, role, enabled, access, retain mode) without contacting Hindsight. Use it to pick the bank value for the sibling bank, mental-model, and knowledge-page tools; hindsight_status shows live bank health, and hindsight_bank_get returns one bank's Hindsight-side facts. Read-only.",
+      parameters: Type.Object({}),
+      async execute(_id, _params, signal, _onUpdate, ctx) {
+        useCwd(ctx.cwd);
+        if (signal?.aborted) throw new Error("Aborted");
+        const operations = await loadOperations();
+        const result = operations.bankList();
+        return {
+          content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
+          details: result,
+        };
+      },
+      renderResult: renderMemoryToolTextResult,
+    }),
+    defineCatalogTool({
+      name: "hindsight_bank_get",
+      label: "Hindsight Bank Get",
+      description:
+        "Read one bank's Hindsight-side facts: existence (list-banks), stats, and bank config. A retired /profile is not a hard failure. Read-only. Use hindsight_bank_set_mission to change missions, and hindsight_bank_list for the Pi-configured bank list.",
       parameters: Type.Object({
-        action: Type.Union([Type.Literal("get"), Type.Literal("update_mission")]),
-        bank: Type.Optional(
-          Type.String({
-            description: "Bank id or alias project|global|user. Defaults to coding/project bank.",
-          }),
-        ),
-        retainMission: Type.Optional(Type.String()),
-        reflectMission: Type.Optional(Type.String()),
-        observationsMission: Type.Optional(Type.String()),
-        dryRun: Type.Optional(
-          Type.Boolean({ description: "When true (default for update_mission), preview only." }),
-        ),
+        bank: bankParameter(),
       }),
       async execute(_id, params, signal, _onUpdate, ctx) {
         useCwd(ctx.cwd);
         if (signal?.aborted) throw new Error("Aborted");
         const operations = await loadOperations();
-        if (params.action === "get") {
-          const result = await operations.bankGet({
-            ...(params.bank ? { bank: params.bank } : {}),
-          });
-          return {
-            content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
-            details: result,
-          };
-        }
+        const result = await operations.bankGet(params.bank ? { bank: params.bank } : {});
+        return {
+          content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
+          details: result,
+        };
+      },
+      renderResult: renderMemoryToolTextResult,
+    }),
+    defineCatalogTool({
+      name: "hindsight_bank_set_mission",
+      label: "Hindsight Bank Set Mission",
+      description:
+        "Patch a bank's retain/reflect/observations mission text; at least one of the three is required. dryRun defaults true (preview) — set false to write. Read the current missions with hindsight_bank_get first and propose a change only when extraction has been consistently wrong. Use hindsight_bank_list for the Pi-configured bank list.",
+      parameters: Type.Object({
+        bank: bankParameter(),
+        retainMission: Type.Optional(
+          Type.String({ description: "Replacement retain mission text." }),
+        ),
+        reflectMission: Type.Optional(
+          Type.String({ description: "Replacement reflect mission text." }),
+        ),
+        observationsMission: Type.Optional(
+          Type.String({ description: "Replacement observations mission text." }),
+        ),
+        dryRun: dryRunParameter("When true (default), preview only; set false to write."),
+      }),
+      async execute(_id, params, signal, _onUpdate, ctx) {
+        useCwd(ctx.cwd);
+        if (signal?.aborted) throw new Error("Aborted");
+        const operations = await loadOperations();
         const result = await operations.bankUpdateMission({
           ...(params.bank ? { bank: params.bank } : {}),
           ...(params.retainMission !== undefined ? { retainMission: params.retainMission } : {}),
@@ -725,58 +797,21 @@ export function createOperationCatalog(deps: MemoryOperationsDeps): OperationCat
       renderResult: renderMemoryToolTextResult,
     }),
     defineCatalogTool({
-      name: "hindsight_mental_model",
-      label: "Hindsight Mental Model",
+      name: "hindsight_mm_list",
+      label: "Hindsight Mental Model List",
       description:
-        "Agent control plane for mental models on the selected bank. Actions: list|get|create|update|refresh|delete. list returns metadata only (id, name, tags, max_tokens, last_refreshed_at); use get for full content/reflect_response. Project-tier create defaults tags to source:pi + project:<activeId>. Optional tagsMatch sets refresh tag matching on create/update trigger. Mutating actions default dryRun=true; set dryRun=false to apply.",
+        "List the mental models on a bank as metadata only (id, name, tags, max_tokens, last_refreshed_at). Use it to find ids, then hindsight_mm_get for full content/reflect_response. Create or change models with hindsight_mm_create/update/refresh/delete (dry-run first). Read-only.",
       parameters: Type.Object({
-        action: Type.Union([
-          Type.Literal("list"),
-          Type.Literal("get"),
-          Type.Literal("create"),
-          Type.Literal("update"),
-          Type.Literal("refresh"),
-          Type.Literal("delete"),
-        ]),
-        bank: Type.Optional(Type.String({ description: "Bank id or alias project|global|user." })),
-        id: Type.Optional(
-          Type.String({ description: "Mental model id for get/update/refresh/delete." }),
-        ),
-        name: Type.Optional(Type.String()),
-        sourceQuery: Type.Optional(Type.String()),
-        tags: Type.Optional(Type.Array(Type.String())),
-        maxTokens: Type.Optional(Type.Integer({ minimum: 1 })),
-        tagsMatch: Type.Optional(tagMatchSchema),
-        dryRun: Type.Optional(
-          Type.Boolean({
-            description: "Mutating actions default true (preview). Set false to apply.",
-          }),
-        ),
+        bank: bankParameter(),
       }),
       async execute(_id, params, signal, _onUpdate, ctx) {
         useCwd(ctx.cwd);
         if (signal?.aborted) throw new Error("Aborted");
-        const mutating =
-          params.action === "create" ||
-          params.action === "update" ||
-          params.action === "refresh" ||
-          params.action === "delete";
         const operations = await loadOperations();
         const result = await operations.mentalModel({
-          action: params.action,
+          action: "list",
           cwd: ctx.cwd,
           ...(params.bank ? { bank: params.bank } : {}),
-          ...(params.id ? { id: params.id } : {}),
-          ...(params.name ? { name: params.name } : {}),
-          ...(params.sourceQuery ? { sourceQuery: params.sourceQuery } : {}),
-          ...(params.tags ? { tags: params.tags } : {}),
-          ...(params.maxTokens !== undefined ? { maxTokens: params.maxTokens } : {}),
-          ...(params.tagsMatch ? { tagsMatch: params.tagsMatch } : {}),
-          ...(mutating
-            ? { dryRun: params.dryRun ?? true }
-            : params.dryRun !== undefined
-              ? { dryRun: params.dryRun }
-              : {}),
         });
         return {
           content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
@@ -786,78 +821,425 @@ export function createOperationCatalog(deps: MemoryOperationsDeps): OperationCat
       renderResult: renderMemoryToolTextResult,
     }),
     defineCatalogTool({
-      name: "hindsight_knowledge",
-      label: "Hindsight Knowledge Pages",
+      name: "hindsight_mm_get",
+      label: "Hindsight Mental Model Get",
       description:
-        "Agent control plane for knowledge pages (living docs over bank observations). Actions: tree|search|get|export|seed_taxonomy|create_page|create_folder|update|delete. Prefer search then get for routine Q&A (pages are not auto-injected). seed_taxonomy creates the fixed five-page coding taxonomy (idempotent; degrades when pages unavailable). Use export only for a portable full-bank markdown bundle. Project-tier create_page defaults tags to source:pi + project:<activeId>. Mutating actions default dryRun=true. Requires Hindsight client/server knowledge-base support.",
+        "Read one mental model's full content and reflect_response by id. Get ids from hindsight_mm_list (metadata-only); regenerate content with hindsight_mm_refresh. Read-only.",
       parameters: Type.Object({
-        action: Type.Union([
-          Type.Literal("tree"),
-          Type.Literal("search"),
-          Type.Literal("get"),
-          Type.Literal("export"),
-          Type.Literal("seed_taxonomy"),
-          Type.Literal("create_page"),
-          Type.Literal("create_folder"),
-          Type.Literal("update"),
-          Type.Literal("delete"),
-        ]),
-        bank: Type.Optional(Type.String({ description: "Bank id or alias project|global|user." })),
-        id: Type.Optional(Type.String({ description: "Page or folder id for get/update/delete." })),
-        query: Type.Optional(
-          Type.String({ description: "Search query for action=search (hybrid page search)." }),
-        ),
-        limit: Type.Optional(
-          Type.Integer({ minimum: 1, maximum: 50, description: "Search result limit (1–50)." }),
-        ),
-        name: Type.Optional(Type.String()),
-        sourceQuery: Type.Optional(
-          Type.String({ description: "Page question for create_page / update." }),
-        ),
-        parentId: Type.Optional(
-          Type.Union([Type.String(), Type.Null()], {
-            description:
-              "Folder parent. Omit for root create; pass null on update to move to root.",
-          }),
-        ),
-        tags: Type.Optional(Type.Array(Type.String())),
-        maxTokens: Type.Optional(Type.Integer({ minimum: 1 })),
-        tagsMatch: Type.Optional(tagMatchSchema),
-        dryRun: Type.Optional(
-          Type.Boolean({
-            description:
-              "Mutating actions (seed_taxonomy|create_page|create_folder|update|delete) default true (preview). Set false to apply.",
-          }),
-        ),
+        id: Type.String({ description: "Mental model id, from hindsight_mm_list." }),
+        bank: bankParameter(),
       }),
       async execute(_id, params, signal, _onUpdate, ctx) {
         useCwd(ctx.cwd);
         if (signal?.aborted) throw new Error("Aborted");
-        const mutating =
-          params.action === "create_page" ||
-          params.action === "create_folder" ||
-          params.action === "update" ||
-          params.action === "delete" ||
-          params.action === "seed_taxonomy";
         const operations = await loadOperations();
-        const result = await operations.knowledge({
-          action: params.action,
+        const result = await operations.mentalModel({
+          action: "get",
           cwd: ctx.cwd,
+          id: params.id,
+          ...(params.bank ? { bank: params.bank } : {}),
+        });
+        return {
+          content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
+          details: result,
+        };
+      },
+      renderResult: renderMemoryToolTextResult,
+    }),
+    defineCatalogTool({
+      name: "hindsight_mm_create",
+      label: "Hindsight Mental Model Create",
+      description:
+        "Create one mental model from a name plus the question it answers. dryRun defaults true (preview) — set false to create. Coding-bank models default tags to source:pi + project:<activeId>; optional tagsMatch sets refresh tag matching on the create trigger. Keep one dimension per model. Use hindsight_mm_update for an existing id, hindsight_mm_refresh to regenerate it.",
+      parameters: Type.Object({
+        name: Type.String({ description: "Mental model name; one dimension per model." }),
+        sourceQuery: Type.String({
+          description: "Question the model answers, answerable from retained memory.",
+        }),
+        id: Type.Optional(Type.String({ description: "Optional caller-chosen model id." })),
+        bank: bankParameter(),
+        tags: tagsParameter(
+          "Optional tag override; omitted defaults to source:pi (+ project:<activeId> on the coding bank).",
+        ),
+        maxTokens: maxTokensParameter("Optional model content cap in tokens."),
+        tagsMatch: Type.Optional(tagMatchSchema),
+        dryRun: dryRunParameter("When true (default), preview only; set false to create."),
+      }),
+      async execute(_id, params, signal, _onUpdate, ctx) {
+        useCwd(ctx.cwd);
+        if (signal?.aborted) throw new Error("Aborted");
+        const operations = await loadOperations();
+        const result = await operations.mentalModel({
+          action: "create",
+          cwd: ctx.cwd,
+          name: params.name,
+          sourceQuery: params.sourceQuery,
           ...(params.bank ? { bank: params.bank } : {}),
           ...(params.id ? { id: params.id } : {}),
-          ...(params.query ? { query: params.query } : {}),
-          ...(params.limit !== undefined ? { limit: params.limit } : {}),
-          ...(params.name ? { name: params.name } : {}),
-          ...(params.sourceQuery ? { sourceQuery: params.sourceQuery } : {}),
-          ...(params.parentId !== undefined ? { parentId: params.parentId } : {}),
           ...(params.tags ? { tags: params.tags } : {}),
           ...(params.maxTokens !== undefined ? { maxTokens: params.maxTokens } : {}),
           ...(params.tagsMatch ? { tagsMatch: params.tagsMatch } : {}),
-          ...(mutating
-            ? { dryRun: params.dryRun ?? true }
-            : params.dryRun !== undefined
-              ? { dryRun: params.dryRun }
-              : {}),
+          dryRun: params.dryRun ?? true,
+        });
+        return {
+          content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
+          details: result,
+        };
+      },
+      renderResult: renderMemoryToolTextResult,
+    }),
+    defineCatalogTool({
+      name: "hindsight_mm_update",
+      label: "Hindsight Mental Model Update",
+      description:
+        "Patch one mental model by id: name, sourceQuery, tags, maxTokens, and/or tagsMatch (at least one required). dryRun defaults true (preview) — set false to write. Read the current model with hindsight_mm_get first; use hindsight_mm_refresh when only the content needs regenerating.",
+      parameters: Type.Object({
+        id: Type.String({ description: "Mental model id to update." }),
+        bank: bankParameter(),
+        name: Type.Optional(Type.String({ description: "New model name." })),
+        sourceQuery: Type.Optional(Type.String({ description: "New model question." })),
+        tags: tagsParameter("New tag list for the model."),
+        maxTokens: maxTokensParameter("New model content cap in tokens."),
+        tagsMatch: Type.Optional(tagMatchSchema),
+        dryRun: dryRunParameter("When true (default), preview only; set false to write."),
+      }),
+      async execute(_id, params, signal, _onUpdate, ctx) {
+        useCwd(ctx.cwd);
+        if (signal?.aborted) throw new Error("Aborted");
+        const operations = await loadOperations();
+        const result = await operations.mentalModel({
+          action: "update",
+          cwd: ctx.cwd,
+          id: params.id,
+          ...(params.bank ? { bank: params.bank } : {}),
+          ...(params.name ? { name: params.name } : {}),
+          ...(params.sourceQuery ? { sourceQuery: params.sourceQuery } : {}),
+          ...(params.tags ? { tags: params.tags } : {}),
+          ...(params.maxTokens !== undefined ? { maxTokens: params.maxTokens } : {}),
+          ...(params.tagsMatch ? { tagsMatch: params.tagsMatch } : {}),
+          dryRun: params.dryRun ?? true,
+        });
+        return {
+          content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
+          details: result,
+        };
+      },
+      renderResult: renderMemoryToolTextResult,
+    }),
+    defineCatalogTool({
+      name: "hindsight_mm_refresh",
+      label: "Hindsight Mental Model Refresh",
+      description:
+        "Regenerate one mental model's content now from its tags and source query. dryRun defaults true (preview) — set false to refresh. Use after relevant memory lands; the inject cache may lag (mentalModels.cacheTtlMs). Use hindsight_mm_update to change the model's definition instead.",
+      parameters: Type.Object({
+        id: Type.String({ description: "Mental model id to refresh." }),
+        bank: bankParameter(),
+        dryRun: dryRunParameter("When true (default), preview only; set false to refresh."),
+      }),
+      async execute(_id, params, signal, _onUpdate, ctx) {
+        useCwd(ctx.cwd);
+        if (signal?.aborted) throw new Error("Aborted");
+        const operations = await loadOperations();
+        const result = await operations.mentalModel({
+          action: "refresh",
+          cwd: ctx.cwd,
+          id: params.id,
+          ...(params.bank ? { bank: params.bank } : {}),
+          dryRun: params.dryRun ?? true,
+        });
+        return {
+          content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
+          details: result,
+        };
+      },
+      renderResult: renderMemoryToolTextResult,
+    }),
+    defineCatalogTool({
+      name: "hindsight_mm_delete",
+      label: "Hindsight Mental Model Delete",
+      description:
+        "Delete one mental model by id. dryRun defaults true (preview) — set false to delete. Confirm the target with hindsight_mm_get first; Pi cannot restore a deleted model. Use hindsight_mm_update when the model should change rather than disappear.",
+      parameters: Type.Object({
+        id: Type.String({ description: "Mental model id to delete." }),
+        bank: bankParameter(),
+        dryRun: dryRunParameter("When true (default), preview only; set false to delete."),
+      }),
+      async execute(_id, params, signal, _onUpdate, ctx) {
+        useCwd(ctx.cwd);
+        if (signal?.aborted) throw new Error("Aborted");
+        const operations = await loadOperations();
+        const result = await operations.mentalModel({
+          action: "delete",
+          cwd: ctx.cwd,
+          id: params.id,
+          ...(params.bank ? { bank: params.bank } : {}),
+          dryRun: params.dryRun ?? true,
+        });
+        return {
+          content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
+          details: result,
+        };
+      },
+      renderResult: renderMemoryToolTextResult,
+    }),
+    defineCatalogTool({
+      name: "hindsight_kb_tree",
+      label: "Hindsight Knowledge Page Tree",
+      description:
+        "Show the knowledge-page tree (folders and pages) of a bank. Read-only. For routine Q&A prefer hindsight_kb_search then hindsight_kb_get — knowledge pages are not auto-injected into context. Requires Hindsight client/server knowledge-base support.",
+      parameters: Type.Object({
+        bank: bankParameter(),
+      }),
+      async execute(_id, params, signal, _onUpdate, ctx) {
+        useCwd(ctx.cwd);
+        if (signal?.aborted) throw new Error("Aborted");
+        const operations = await loadOperations();
+        const result = await operations.knowledge({
+          action: "tree",
+          cwd: ctx.cwd,
+          ...(params.bank ? { bank: params.bank } : {}),
+        });
+        return {
+          content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
+          details: result,
+        };
+      },
+      renderResult: renderMemoryToolTextResult,
+    }),
+    defineCatalogTool({
+      name: "hindsight_kb_search",
+      label: "Hindsight Knowledge Page Search",
+      description:
+        "Hybrid-search knowledge pages in a bank and return matching page references. Read-only. Pair it with hindsight_kb_get (search, then get) for routine Q&A; use hindsight_kb_tree to browse structure instead. Requires Hindsight client/server knowledge-base support.",
+      parameters: Type.Object({
+        query: Type.String({ description: "Hybrid page-search query." }),
+        limit: Type.Optional(
+          Type.Integer({ minimum: 1, maximum: 50, description: "Search result limit (1–50)." }),
+        ),
+        bank: bankParameter(),
+      }),
+      async execute(_id, params, signal, _onUpdate, ctx) {
+        useCwd(ctx.cwd);
+        if (signal?.aborted) throw new Error("Aborted");
+        const operations = await loadOperations();
+        const result = await operations.knowledge({
+          action: "search",
+          cwd: ctx.cwd,
+          query: params.query,
+          ...(params.limit !== undefined ? { limit: params.limit } : {}),
+          ...(params.bank ? { bank: params.bank } : {}),
+        });
+        return {
+          content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
+          details: result,
+        };
+      },
+      renderResult: renderMemoryToolTextResult,
+    }),
+    defineCatalogTool({
+      name: "hindsight_kb_get",
+      label: "Hindsight Knowledge Page Get",
+      description:
+        "Read one knowledge page or folder by id, with its full content. Read-only. Get ids from hindsight_kb_search or hindsight_kb_tree; change a page with hindsight_kb_update. Requires Hindsight client/server knowledge-base support.",
+      parameters: Type.Object({
+        id: Type.String({ description: "Page or folder id to read." }),
+        bank: bankParameter(),
+      }),
+      async execute(_id, params, signal, _onUpdate, ctx) {
+        useCwd(ctx.cwd);
+        if (signal?.aborted) throw new Error("Aborted");
+        const operations = await loadOperations();
+        const result = await operations.knowledge({
+          action: "get",
+          cwd: ctx.cwd,
+          id: params.id,
+          ...(params.bank ? { bank: params.bank } : {}),
+        });
+        return {
+          content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
+          details: result,
+        };
+      },
+      renderResult: renderMemoryToolTextResult,
+    }),
+    defineCatalogTool({
+      name: "hindsight_kb_create_page",
+      label: "Hindsight Knowledge Page Create",
+      description:
+        "Create one knowledge page from the question it documents. dryRun defaults true (preview) — set false to create. Coding-bank pages default tags to source:pi + project:<activeId>; optional tagsMatch restates the server page defaults with refresh tag matching. Nest it with parentId, create a folder with hindsight_kb_create_folder, and change an existing page with hindsight_kb_update. Requires Hindsight client/server knowledge-base support.",
+      parameters: Type.Object({
+        name: Type.String({ description: "Page name." }),
+        sourceQuery: Type.String({ description: "The question this page documents." }),
+        parentId: parentIdParameter(),
+        bank: bankParameter(),
+        tags: tagsParameter(
+          "Optional tag override; omitted defaults to source:pi (+ project:<activeId> on the coding bank).",
+        ),
+        maxTokens: maxTokensParameter("Optional page content cap in tokens."),
+        tagsMatch: Type.Optional(tagMatchSchema),
+        dryRun: dryRunParameter("When true (default), preview only; set false to create."),
+      }),
+      async execute(_id, params, signal, _onUpdate, ctx) {
+        useCwd(ctx.cwd);
+        if (signal?.aborted) throw new Error("Aborted");
+        const operations = await loadOperations();
+        const result = await operations.knowledge({
+          action: "create_page",
+          cwd: ctx.cwd,
+          name: params.name,
+          sourceQuery: params.sourceQuery,
+          ...(params.parentId !== undefined ? { parentId: params.parentId } : {}),
+          ...(params.bank ? { bank: params.bank } : {}),
+          ...(params.tags ? { tags: params.tags } : {}),
+          ...(params.maxTokens !== undefined ? { maxTokens: params.maxTokens } : {}),
+          ...(params.tagsMatch ? { tagsMatch: params.tagsMatch } : {}),
+          dryRun: params.dryRun ?? true,
+        });
+        return {
+          content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
+          details: result,
+        };
+      },
+      renderResult: renderMemoryToolTextResult,
+    }),
+    defineCatalogTool({
+      name: "hindsight_kb_create_folder",
+      label: "Hindsight Knowledge Folder Create",
+      description:
+        "Create one knowledge page folder, optionally nested under parentId. dryRun defaults true (preview) — set false to create. Folders group pages; create pages with hindsight_kb_create_page. Requires Hindsight client/server knowledge-base support.",
+      parameters: Type.Object({
+        name: Type.String({ description: "Folder name." }),
+        parentId: parentIdParameter(),
+        bank: bankParameter(),
+        dryRun: dryRunParameter("When true (default), preview only; set false to create."),
+      }),
+      async execute(_id, params, signal, _onUpdate, ctx) {
+        useCwd(ctx.cwd);
+        if (signal?.aborted) throw new Error("Aborted");
+        const operations = await loadOperations();
+        const result = await operations.knowledge({
+          action: "create_folder",
+          cwd: ctx.cwd,
+          name: params.name,
+          ...(params.parentId !== undefined ? { parentId: params.parentId } : {}),
+          ...(params.bank ? { bank: params.bank } : {}),
+          dryRun: params.dryRun ?? true,
+        });
+        return {
+          content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
+          details: result,
+        };
+      },
+      renderResult: renderMemoryToolTextResult,
+    }),
+    defineCatalogTool({
+      name: "hindsight_kb_update",
+      label: "Hindsight Knowledge Page Update",
+      description:
+        "Patch one knowledge page or folder by id: name, parentId, sourceQuery, tags, and/or maxTokens (at least one required). Pass parentId null to move it back to the root. dryRun defaults true (preview) — set false to write. Read the target with hindsight_kb_get first. Requires Hindsight client/server knowledge-base support.",
+      parameters: Type.Object({
+        id: Type.String({ description: "Page or folder id to update." }),
+        bank: bankParameter(),
+        name: Type.Optional(Type.String({ description: "New page or folder name." })),
+        parentId: parentIdParameter(),
+        sourceQuery: Type.Optional(Type.String({ description: "New page question." })),
+        tags: tagsParameter("New tag list for the page."),
+        maxTokens: maxTokensParameter("New page content cap in tokens."),
+        dryRun: dryRunParameter("When true (default), preview only; set false to write."),
+      }),
+      async execute(_id, params, signal, _onUpdate, ctx) {
+        useCwd(ctx.cwd);
+        if (signal?.aborted) throw new Error("Aborted");
+        const operations = await loadOperations();
+        const result = await operations.knowledge({
+          action: "update",
+          cwd: ctx.cwd,
+          id: params.id,
+          ...(params.bank ? { bank: params.bank } : {}),
+          ...(params.name ? { name: params.name } : {}),
+          ...(params.parentId !== undefined ? { parentId: params.parentId } : {}),
+          ...(params.sourceQuery ? { sourceQuery: params.sourceQuery } : {}),
+          ...(params.tags ? { tags: params.tags } : {}),
+          ...(params.maxTokens !== undefined ? { maxTokens: params.maxTokens } : {}),
+          dryRun: params.dryRun ?? true,
+        });
+        return {
+          content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
+          details: result,
+        };
+      },
+      renderResult: renderMemoryToolTextResult,
+    }),
+    defineCatalogTool({
+      name: "hindsight_kb_delete",
+      label: "Hindsight Knowledge Page Delete",
+      description:
+        "Delete one knowledge page or folder by id. dryRun defaults true (preview) — set false to delete; Pi cannot restore it. Confirm the target with hindsight_kb_get or hindsight_kb_tree first. Requires Hindsight client/server knowledge-base support.",
+      parameters: Type.Object({
+        id: Type.String({ description: "Page or folder id to delete." }),
+        bank: bankParameter(),
+        dryRun: dryRunParameter("When true (default), preview only; set false to delete."),
+      }),
+      async execute(_id, params, signal, _onUpdate, ctx) {
+        useCwd(ctx.cwd);
+        if (signal?.aborted) throw new Error("Aborted");
+        const operations = await loadOperations();
+        const result = await operations.knowledge({
+          action: "delete",
+          cwd: ctx.cwd,
+          id: params.id,
+          ...(params.bank ? { bank: params.bank } : {}),
+          dryRun: params.dryRun ?? true,
+        });
+        return {
+          content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
+          details: result,
+        };
+      },
+      renderResult: renderMemoryToolTextResult,
+    }),
+    defineCatalogTool({
+      name: "hindsight_kb_seed_taxonomy",
+      label: "Hindsight Knowledge Seed Taxonomy",
+      description:
+        "Seed the fixed five-page coding knowledge taxonomy (idempotent; tags knowledge:component|concept|convention|decision|feature-work). dryRun defaults true (preview) — set false to apply. Degrades with knowledge_pages_unavailable when the client/server lacks knowledge-base APIs. Use hindsight_kb_create_page for one custom page instead.",
+      parameters: Type.Object({
+        bank: bankParameter(),
+        dryRun: dryRunParameter("When true (default), preview only; set false to apply."),
+      }),
+      async execute(_id, params, signal, _onUpdate, ctx) {
+        useCwd(ctx.cwd);
+        if (signal?.aborted) throw new Error("Aborted");
+        const operations = await loadOperations();
+        const result = await operations.knowledge({
+          action: "seed_taxonomy",
+          cwd: ctx.cwd,
+          ...(params.bank ? { bank: params.bank } : {}),
+          dryRun: params.dryRun ?? true,
+        });
+        return {
+          content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
+          details: result,
+        };
+      },
+      renderResult: renderMemoryToolTextResult,
+    }),
+    defineCatalogTool({
+      name: "hindsight_kb_export",
+      label: "Hindsight Knowledge Base Export",
+      description:
+        "Export the whole bank knowledge base as one portable markdown bundle. Heavy and read-only — use it only for a full export/backup, not routine reading (that is hindsight_kb_search + hindsight_kb_get). Requires Hindsight client/server knowledge-base support.",
+      parameters: Type.Object({
+        bank: bankParameter(),
+      }),
+      async execute(_id, params, signal, _onUpdate, ctx) {
+        useCwd(ctx.cwd);
+        if (signal?.aborted) throw new Error("Aborted");
+        const operations = await loadOperations();
+        const result = await operations.knowledge({
+          action: "export",
+          cwd: ctx.cwd,
+          ...(params.bank ? { bank: params.bank } : {}),
         });
         return {
           content: [{ type: "text", text: JSON.stringify(result, null, 2) }],

@@ -8,7 +8,7 @@ Official Hindsight guidance: [Best practices](https://hindsight.vectorize.io/bes
 
 ## Hard rules (always)
 
-- **Propose, don’t invent silently.** Create/update/refresh/delete use tools with **dry-run first** (`hindsight_mental_model`, `hindsight_bank`); user confirms via dry-run false or hub `t`.
+- **Propose, don’t invent silently.** Create/update/refresh/delete use tools with **dry-run first** (`hindsight_mm_create`/`hindsight_mm_update`/`hindsight_mm_refresh`/`hindsight_mm_delete`, `hindsight_bank_set_mission`); user confirms via dry-run false or hub `t`.
 - **Tags ⊆ retain tags.** Project models need `source:pi` + `project:<id>`; bank-global prefs: `source:pi` only. Tags not written at retain → empty refresh.
 - **One dimension per mental model.** Not “everything about the user/project.”
 - **Lean inject:** prefs ~600 tokens, project ~800. Fat content burns every turn.
@@ -46,7 +46,7 @@ Defaults live in `extensions/banks/bank-operations.ts` (`defaultProjectBankMissi
 
 ### When to propose mission changes
 
-Propose `hindsight_bank` `update_mission` (dry-run) when:
+Propose `hindsight_bank_set_mission` (dry-run) when:
 
 - Extraction is consistently wrong (too much noise / missing decisions).
 - User says prefs are “wrong” or “missing” after several sessions.
@@ -58,7 +58,7 @@ Do **not** churn missions every session.
 
 Optimize only when a **repeatable problem** shows up—not because content is imperfect once.
 
-### Mental-model signals (inspect inject + `hindsight_mental_model` list/get)
+### Mental-model signals (inspect inject + `hindsight_mm_list`/`hindsight_mm_get`)
 
 | Signal                        | What you see                                                                                                 | Likely fix                                                                                                                                                                   | Priority                                    |
 | ----------------------------- | ------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------- |
@@ -72,7 +72,7 @@ Optimize only when a **repeatable problem** shows up—not because content is im
 | **Noise as “facts”**          | Probe/bait/test harness text treated as durable prefs                                                        | Retain correction + refresh; mission ignore-list for probes; don’t import bait sessions                                                                                      | **Medium**                                  |
 | **Slightly imperfect prose**  | Wording could be nicer but policy is right                                                                   | Leave it; delta refresh after consolidation is enough                                                                                                                        | **Low** — do not nag                        |
 
-### Mission signals (`hindsight_bank` get + memory quality over several sessions)
+### Mission signals (`hindsight_bank_get` + memory quality over several sessions)
 
 | Signal                      | What you see                                                                  | Likely fix                                                             | Priority                          |
 | --------------------------- | ----------------------------------------------------------------------------- | ---------------------------------------------------------------------- | --------------------------------- |
@@ -144,7 +144,7 @@ Use the **signals table above** (broken content, wrong prefs, missing starters, 
 
 On user **memory complaints**, load skill `hindsight-memory-doctor` (`/skill:hindsight-memory-doctor`) — same inspect → diagnose → dry-run propose flow.
 
-1. **Inspect:** `hindsight_status`, `hindsight_scope`, `hindsight_mental_model` list/get, `hindsight_bank` get.
+1. **Inspect:** `hindsight_status`, `hindsight_scope`, `hindsight_mm_list`/`hindsight_mm_get`, `hindsight_bank_get`.
 2. **Diagnose** against this doc (tags, size, empty content, wrong prefs, missing project starters).
 3. **Propose** in plain language: what changes, why, dry-run payload.
 4. **Apply** only after user ok: `dryRun: false` on the same tool, or hub `t`.

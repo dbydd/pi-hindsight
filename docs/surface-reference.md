@@ -6,29 +6,45 @@ This reference is generated from the operation catalog and config editing regist
 
 Pi Hindsight 1.0 supports a stable Pi-first Hindsight integration. Core and Pi workflow tools are part of the stable 1.0 contract. Capability-gated tools are supported when the connected Hindsight server exposes the required upstream endpoint or field; unsupported servers should return a clear capability error.
 
-| Tool                      | Scope                |
-| ------------------------- | -------------------- |
-| `hindsight_recall`        | core 1.0             |
-| `hindsight_retain`        | core 1.0             |
-| `hindsight_retain_global` | core 1.0             |
-| `hindsight_reflect`       | core 1.0             |
-| `hindsight_status`        | supported 1.0        |
-| `hindsight_seed_git`      | supported 1.0        |
-| `hindsight_scope`         | supported 1.0        |
-| `hindsight_config`        | supported 1.0        |
-| `hindsight_bank`          | supported 1.0        |
-| `hindsight_mental_model`  | capability-gated 1.0 |
-| `hindsight_knowledge`     | capability-gated 1.0 |
-| `hindsight_scope_migrate` | supported 1.0        |
+| Tool                         | Scope                |
+| ---------------------------- | -------------------- |
+| `hindsight_recall`           | core 1.0             |
+| `hindsight_retain`           | core 1.0             |
+| `hindsight_retain_user`      | core 1.0             |
+| `hindsight_reflect`          | core 1.0             |
+| `hindsight_status`           | supported 1.0        |
+| `hindsight_seed_git`         | supported 1.0        |
+| `hindsight_scope`            | supported 1.0        |
+| `hindsight_config_get`       | supported 1.0        |
+| `hindsight_config_set`       | supported 1.0        |
+| `hindsight_bank_list`        | supported 1.0        |
+| `hindsight_bank_get`         | supported 1.0        |
+| `hindsight_bank_set_mission` | supported 1.0        |
+| `hindsight_mm_list`          | capability-gated 1.0 |
+| `hindsight_mm_get`           | capability-gated 1.0 |
+| `hindsight_mm_create`        | capability-gated 1.0 |
+| `hindsight_mm_update`        | capability-gated 1.0 |
+| `hindsight_mm_refresh`       | capability-gated 1.0 |
+| `hindsight_mm_delete`        | capability-gated 1.0 |
+| `hindsight_kb_tree`          | capability-gated 1.0 |
+| `hindsight_kb_search`        | capability-gated 1.0 |
+| `hindsight_kb_get`           | capability-gated 1.0 |
+| `hindsight_kb_create_page`   | capability-gated 1.0 |
+| `hindsight_kb_create_folder` | capability-gated 1.0 |
+| `hindsight_kb_update`        | capability-gated 1.0 |
+| `hindsight_kb_delete`        | capability-gated 1.0 |
+| `hindsight_kb_seed_taxonomy` | capability-gated 1.0 |
+| `hindsight_kb_export`        | capability-gated 1.0 |
+| `hindsight_scope_migrate`    | supported 1.0        |
 
 ## Deferred or non-goal upstream surfaces
 
-| Surface                 | 1.0 status | Rationale                                                                                   |
-| ----------------------- | ---------- | ------------------------------------------------------------------------------------------- |
-| Cross-bank list/create  | Deferred   | No public `list_banks` or arbitrary cross-bank `create_bank` tool in 1.0.                   |
-| Full-bank deletion      | Deferred   | No public `delete_bank` tool in 1.0; selected-bank reset/delete-like repair remains scoped. |
-| Platform bank stats     | Deferred   | No global `get_bank_stats` dashboard/tool in 1.0.                                           |
-| Audit logs and webhooks | Non-goal   | Platform administration is outside the Pi-first 1.0 memory lifecycle.                       |
+| Surface                 | 1.0 status | Rationale                                                                                                                                          |
+| ----------------------- | ---------- | -------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Cross-bank list/create  | Deferred   | No public Hindsight-side `list_banks` or arbitrary cross-bank `create_bank` tool in 1.0. `hindsight_bank_list` lists only the Pi-configured banks. |
+| Full-bank deletion      | Deferred   | No public `delete_bank` tool in 1.0; selected-bank reset/delete-like repair remains scoped.                                                        |
+| Platform bank stats     | Deferred   | No global `get_bank_stats` dashboard/tool in 1.0.                                                                                                  |
+| Audit logs and webhooks | Non-goal   | Platform administration is outside the Pi-first 1.0 memory lifecycle.                                                                              |
 
 ## Tools
 
@@ -76,9 +92,9 @@ Retain explicit raw content in Hindsight. Use for durable facts or decisions.
 | `documentTags`      | array<string>                                                             | no       | Optional Hindsight document_tags for this retained document when supported.                                                                                                                             |
 | `async`             | boolean                                                                   | no       | Optional Hindsight async extraction flag for this retain call. Defaults to configured retain.async.                                                                                                     |
 
-### `hindsight_retain_global`
+### `hindsight_retain_user`
 
-Retain explicit durable user memory in the configured user bank. Use for stable user identity, preferences, and cross-project workflows only.
+Retain explicit durable user memory in the configured user bank. Use for stable user identity, preferences, and cross-project workflows only — for anything tied to this repository use hindsight_retain instead (hindsight_retain with bank=global reaches the same user bank).
 
 | Parameter           | Type                                                                      | Required | Description                                                                                                                                                                                             |
 | ------------------- | ------------------------------------------------------------------------- | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -141,64 +157,211 @@ Show active project identity: project:<id> tag, derivation (pin/remote/basename)
 | Parameter | Type | Required | Description |
 | --------- | ---- | -------- | ----------- |
 
-### `hindsight_config`
+### `hindsight_config_get`
 
-Get or patch allowlisted Pi Hindsight config (project or global file). action=get returns effective values (no secrets) and the allowlist. action=patch updates only typed allowlisted keys (setupComplete, scopeMode, projectId, projectIdStrategy, includeSharedObservations, userScopeTags, projectBankId, enableGlobalBank, globalBankId, agentUse, mentalModelsInject, memoryProfile, recall/retain knobs, baseUrl, apiKeyEnvVar, timeoutMs). dryRun defaults true for patch. Domain-tagged setupComplete requires projectBankId. Never pass raw API keys — use apiKeyEnvVar.
+Read the effective allowlisted Pi Hindsight config values plus the allowlist; secrets are never returned. Read-only. Use it before hindsight_config_set to see what a patch would change; hindsight_status covers the setup gate, banks, and sync readiness instead.
+
+| Parameter | Type | Required | Description |
+| --------- | ---- | -------- | ----------- |
+
+### `hindsight_config_set`
+
+Patch allowlisted Pi Hindsight config (project or global file) with typed keys only: setupComplete, scopeMode, projectId, projectIdStrategy, includeSharedObservations, userScopeTags, projectBankId, enableGlobalBank, globalBankId, agentUse, mentalModelsInject, memoryProfile, recall/retain knobs, baseUrl, apiKeyEnvVar, timeoutMs. dryRun defaults true (preview) — set false to write. Domain-tagged setupComplete requires projectBankId. Never pass raw API keys — use apiKeyEnvVar. Read current values with hindsight_config_get first.
 
 | Parameter | Type              | Required | Description                                                      |
 | --------- | ----------------- | -------- | ---------------------------------------------------------------- |
-| `action`  | get \| patch      | yes      |                                                                  |
-| `patch`   | object            | no       | Typed allowlisted config fields only (no free-form keys).        |
+| `patch`   | object            | yes      | Typed allowlisted config fields only (no free-form keys).        |
 | `scope`   | project \| global | no       | Which config file to write (default project .pi/hindsight.json). |
-| `dryRun`  | boolean           | no       | When true (default for patch), preview only; set false to write. |
+| `dryRun`  | boolean           | no       | When true (default), preview only; set false to write.           |
 
-### `hindsight_bank`
+### `hindsight_bank_list`
 
-Inspect or update the selected coding/life bank. action=get returns exists/stats/config (list-banks existence; retired /profile is not a hard failure). action=update_mission patches retain/reflect/observations mission (dryRun default true for safety).
+List the banks Pi is configured with (id, bankId, role, enabled, access, retain mode) without contacting Hindsight. Use it to pick the bank value for the sibling bank, mental-model, and knowledge-page tools; hindsight_status shows live bank health, and hindsight_bank_get returns one bank's Hindsight-side facts. Read-only.
 
-| Parameter             | Type                  | Required | Description                                                              |
-| --------------------- | --------------------- | -------- | ------------------------------------------------------------------------ |
-| `action`              | get \| update_mission | yes      |                                                                          |
-| `bank`                | string                | no       | Bank id or alias project\|global\|user. Defaults to coding/project bank. |
-| `retainMission`       | string                | no       |                                                                          |
-| `reflectMission`      | string                | no       |                                                                          |
-| `observationsMission` | string                | no       |                                                                          |
-| `dryRun`              | boolean               | no       | When true (default for update_mission), preview only.                    |
+| Parameter | Type | Required | Description |
+| --------- | ---- | -------- | ----------- |
 
-### `hindsight_mental_model`
+### `hindsight_bank_get`
 
-Agent control plane for mental models on the selected bank. Actions: list|get|create|update|refresh|delete. list returns metadata only (id, name, tags, max_tokens, last_refreshed_at); use get for full content/reflect_response. Project-tier create defaults tags to source:pi + project:<activeId>. Optional tagsMatch sets refresh tag matching on create/update trigger. Mutating actions default dryRun=true; set dryRun=false to apply.
+Read one bank's Hindsight-side facts: existence (list-banks), stats, and bank config. A retired /profile is not a hard failure. Read-only. Use hindsight_bank_set_mission to change missions, and hindsight_bank_list for the Pi-configured bank list.
 
-| Parameter     | Type                                                 | Required | Description                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
-| ------------- | ---------------------------------------------------- | -------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `action`      | list \| get \| create \| update \| refresh \| delete | yes      |                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
-| `bank`        | string                                               | no       | Bank id or alias project\|global\|user.                                                                                                                                                                                                                                                                                                                                                                                                                                            |
-| `id`          | string                                               | no       | Mental model id for get/update/refresh/delete.                                                                                                                                                                                                                                                                                                                                                                                                                                     |
-| `name`        | string                                               | no       |                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
-| `sourceQuery` | string                                               | no       |                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
-| `tags`        | array<string>                                        | no       |                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
-| `maxTokens`   | integer                                              | no       |                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
-| `tagsMatch`   | any \| all \| any_strict \| all_strict \| exact      | no       | How to match tags. Always enforced together with the automatic Pi project/user scope tag filter. 'exact' folds the automatic scope tags into the exact-match set (memory tags must equal scope tags plus these tags, no more, no less) instead of AND-ing a separate scope group, since scope tags must still be present. To also include Hindsight shared/untagged observations (exact empty tags), set includeSharedObservations=true or config.scope.includeSharedObservations. |
-| `dryRun`      | boolean                                              | no       | Mutating actions default true (preview). Set false to apply.                                                                                                                                                                                                                                                                                                                                                                                                                       |
+| Parameter | Type   | Required | Description                                                                  |
+| --------- | ------ | -------- | ---------------------------------------------------------------------------- |
+| `bank`    | string | no       | Bank id or alias project\|user\|global. Defaults to the coding/project bank. |
 
-### `hindsight_knowledge`
+### `hindsight_bank_set_mission`
 
-Agent control plane for knowledge pages (living docs over bank observations). Actions: tree|search|get|export|seed_taxonomy|create_page|create_folder|update|delete. Prefer search then get for routine Q&A (pages are not auto-injected). seed_taxonomy creates the fixed five-page coding taxonomy (idempotent; degrades when pages unavailable). Use export only for a portable full-bank markdown bundle. Project-tier create_page defaults tags to source:pi + project:<activeId>. Mutating actions default dryRun=true. Requires Hindsight client/server knowledge-base support.
+Patch a bank's retain/reflect/observations mission text; at least one of the three is required. dryRun defaults true (preview) — set false to write. Read the current missions with hindsight_bank_get first and propose a change only when extraction has been consistently wrong. Use hindsight_bank_list for the Pi-configured bank list.
 
-| Parameter     | Type                                                                                                 | Required | Description                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
-| ------------- | ---------------------------------------------------------------------------------------------------- | -------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `action`      | tree \| search \| get \| export \| seed_taxonomy \| create_page \| create_folder \| update \| delete | yes      |                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
-| `bank`        | string                                                                                               | no       | Bank id or alias project\|global\|user.                                                                                                                                                                                                                                                                                                                                                                                                                                            |
-| `id`          | string                                                                                               | no       | Page or folder id for get/update/delete.                                                                                                                                                                                                                                                                                                                                                                                                                                           |
-| `query`       | string                                                                                               | no       | Search query for action=search (hybrid page search).                                                                                                                                                                                                                                                                                                                                                                                                                               |
-| `limit`       | integer                                                                                              | no       | Search result limit (1–50).                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
-| `name`        | string                                                                                               | no       |                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
-| `sourceQuery` | string                                                                                               | no       | Page question for create_page / update.                                                                                                                                                                                                                                                                                                                                                                                                                                            |
-| `parentId`    | string \| null                                                                                       | no       | Folder parent. Omit for root create; pass null on update to move to root.                                                                                                                                                                                                                                                                                                                                                                                                          |
-| `tags`        | array<string>                                                                                        | no       |                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
-| `maxTokens`   | integer                                                                                              | no       |                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
-| `tagsMatch`   | any \| all \| any_strict \| all_strict \| exact                                                      | no       | How to match tags. Always enforced together with the automatic Pi project/user scope tag filter. 'exact' folds the automatic scope tags into the exact-match set (memory tags must equal scope tags plus these tags, no more, no less) instead of AND-ing a separate scope group, since scope tags must still be present. To also include Hindsight shared/untagged observations (exact empty tags), set includeSharedObservations=true or config.scope.includeSharedObservations. |
-| `dryRun`      | boolean                                                                                              | no       | Mutating actions (seed_taxonomy\|create_page\|create_folder\|update\|delete) default true (preview). Set false to apply.                                                                                                                                                                                                                                                                                                                                                           |
+| Parameter             | Type    | Required | Description                                                                  |
+| --------------------- | ------- | -------- | ---------------------------------------------------------------------------- |
+| `bank`                | string  | no       | Bank id or alias project\|user\|global. Defaults to the coding/project bank. |
+| `retainMission`       | string  | no       | Replacement retain mission text.                                             |
+| `reflectMission`      | string  | no       | Replacement reflect mission text.                                            |
+| `observationsMission` | string  | no       | Replacement observations mission text.                                       |
+| `dryRun`              | boolean | no       | When true (default), preview only; set false to write.                       |
+
+### `hindsight_mm_list`
+
+List the mental models on a bank as metadata only (id, name, tags, max_tokens, last_refreshed_at). Use it to find ids, then hindsight_mm_get for full content/reflect_response. Create or change models with hindsight_mm_create/update/refresh/delete (dry-run first). Read-only.
+
+| Parameter | Type   | Required | Description                                                                  |
+| --------- | ------ | -------- | ---------------------------------------------------------------------------- |
+| `bank`    | string | no       | Bank id or alias project\|user\|global. Defaults to the coding/project bank. |
+
+### `hindsight_mm_get`
+
+Read one mental model's full content and reflect_response by id. Get ids from hindsight_mm_list (metadata-only); regenerate content with hindsight_mm_refresh. Read-only.
+
+| Parameter | Type   | Required | Description                                                                  |
+| --------- | ------ | -------- | ---------------------------------------------------------------------------- |
+| `id`      | string | yes      | Mental model id, from hindsight_mm_list.                                     |
+| `bank`    | string | no       | Bank id or alias project\|user\|global. Defaults to the coding/project bank. |
+
+### `hindsight_mm_create`
+
+Create one mental model from a name plus the question it answers. dryRun defaults true (preview) — set false to create. Coding-bank models default tags to source:pi + project:<activeId>; optional tagsMatch sets refresh tag matching on the create trigger. Keep one dimension per model. Use hindsight_mm_update for an existing id, hindsight_mm_refresh to regenerate it.
+
+| Parameter     | Type                                            | Required | Description                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
+| ------------- | ----------------------------------------------- | -------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `name`        | string                                          | yes      | Mental model name; one dimension per model.                                                                                                                                                                                                                                                                                                                                                                                                                                        |
+| `sourceQuery` | string                                          | yes      | Question the model answers, answerable from retained memory.                                                                                                                                                                                                                                                                                                                                                                                                                       |
+| `id`          | string                                          | no       | Optional caller-chosen model id.                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
+| `bank`        | string                                          | no       | Bank id or alias project\|user\|global. Defaults to the coding/project bank.                                                                                                                                                                                                                                                                                                                                                                                                       |
+| `tags`        | array<string>                                   | no       | Optional tag override; omitted defaults to source:pi (+ project:<activeId> on the coding bank).                                                                                                                                                                                                                                                                                                                                                                                    |
+| `maxTokens`   | integer                                         | no       | Optional model content cap in tokens.                                                                                                                                                                                                                                                                                                                                                                                                                                              |
+| `tagsMatch`   | any \| all \| any_strict \| all_strict \| exact | no       | How to match tags. Always enforced together with the automatic Pi project/user scope tag filter. 'exact' folds the automatic scope tags into the exact-match set (memory tags must equal scope tags plus these tags, no more, no less) instead of AND-ing a separate scope group, since scope tags must still be present. To also include Hindsight shared/untagged observations (exact empty tags), set includeSharedObservations=true or config.scope.includeSharedObservations. |
+| `dryRun`      | boolean                                         | no       | When true (default), preview only; set false to create.                                                                                                                                                                                                                                                                                                                                                                                                                            |
+
+### `hindsight_mm_update`
+
+Patch one mental model by id: name, sourceQuery, tags, maxTokens, and/or tagsMatch (at least one required). dryRun defaults true (preview) — set false to write. Read the current model with hindsight_mm_get first; use hindsight_mm_refresh when only the content needs regenerating.
+
+| Parameter     | Type                                            | Required | Description                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
+| ------------- | ----------------------------------------------- | -------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `id`          | string                                          | yes      | Mental model id to update.                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
+| `bank`        | string                                          | no       | Bank id or alias project\|user\|global. Defaults to the coding/project bank.                                                                                                                                                                                                                                                                                                                                                                                                       |
+| `name`        | string                                          | no       | New model name.                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
+| `sourceQuery` | string                                          | no       | New model question.                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
+| `tags`        | array<string>                                   | no       | New tag list for the model.                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
+| `maxTokens`   | integer                                         | no       | New model content cap in tokens.                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
+| `tagsMatch`   | any \| all \| any_strict \| all_strict \| exact | no       | How to match tags. Always enforced together with the automatic Pi project/user scope tag filter. 'exact' folds the automatic scope tags into the exact-match set (memory tags must equal scope tags plus these tags, no more, no less) instead of AND-ing a separate scope group, since scope tags must still be present. To also include Hindsight shared/untagged observations (exact empty tags), set includeSharedObservations=true or config.scope.includeSharedObservations. |
+| `dryRun`      | boolean                                         | no       | When true (default), preview only; set false to write.                                                                                                                                                                                                                                                                                                                                                                                                                             |
+
+### `hindsight_mm_refresh`
+
+Regenerate one mental model's content now from its tags and source query. dryRun defaults true (preview) — set false to refresh. Use after relevant memory lands; the inject cache may lag (mentalModels.cacheTtlMs). Use hindsight_mm_update to change the model's definition instead.
+
+| Parameter | Type    | Required | Description                                                                  |
+| --------- | ------- | -------- | ---------------------------------------------------------------------------- |
+| `id`      | string  | yes      | Mental model id to refresh.                                                  |
+| `bank`    | string  | no       | Bank id or alias project\|user\|global. Defaults to the coding/project bank. |
+| `dryRun`  | boolean | no       | When true (default), preview only; set false to refresh.                     |
+
+### `hindsight_mm_delete`
+
+Delete one mental model by id. dryRun defaults true (preview) — set false to delete. Confirm the target with hindsight_mm_get first; Pi cannot restore a deleted model. Use hindsight_mm_update when the model should change rather than disappear.
+
+| Parameter | Type    | Required | Description                                                                  |
+| --------- | ------- | -------- | ---------------------------------------------------------------------------- |
+| `id`      | string  | yes      | Mental model id to delete.                                                   |
+| `bank`    | string  | no       | Bank id or alias project\|user\|global. Defaults to the coding/project bank. |
+| `dryRun`  | boolean | no       | When true (default), preview only; set false to delete.                      |
+
+### `hindsight_kb_tree`
+
+Show the knowledge-page tree (folders and pages) of a bank. Read-only. For routine Q&A prefer hindsight_kb_search then hindsight_kb_get — knowledge pages are not auto-injected into context. Requires Hindsight client/server knowledge-base support.
+
+| Parameter | Type   | Required | Description                                                                  |
+| --------- | ------ | -------- | ---------------------------------------------------------------------------- |
+| `bank`    | string | no       | Bank id or alias project\|user\|global. Defaults to the coding/project bank. |
+
+### `hindsight_kb_search`
+
+Hybrid-search knowledge pages in a bank and return matching page references. Read-only. Pair it with hindsight_kb_get (search, then get) for routine Q&A; use hindsight_kb_tree to browse structure instead. Requires Hindsight client/server knowledge-base support.
+
+| Parameter | Type    | Required | Description                                                                  |
+| --------- | ------- | -------- | ---------------------------------------------------------------------------- |
+| `query`   | string  | yes      | Hybrid page-search query.                                                    |
+| `limit`   | integer | no       | Search result limit (1–50).                                                  |
+| `bank`    | string  | no       | Bank id or alias project\|user\|global. Defaults to the coding/project bank. |
+
+### `hindsight_kb_get`
+
+Read one knowledge page or folder by id, with its full content. Read-only. Get ids from hindsight_kb_search or hindsight_kb_tree; change a page with hindsight_kb_update. Requires Hindsight client/server knowledge-base support.
+
+| Parameter | Type   | Required | Description                                                                  |
+| --------- | ------ | -------- | ---------------------------------------------------------------------------- |
+| `id`      | string | yes      | Page or folder id to read.                                                   |
+| `bank`    | string | no       | Bank id or alias project\|user\|global. Defaults to the coding/project bank. |
+
+### `hindsight_kb_create_page`
+
+Create one knowledge page from the question it documents. dryRun defaults true (preview) — set false to create. Coding-bank pages default tags to source:pi + project:<activeId>; optional tagsMatch restates the server page defaults with refresh tag matching. Nest it with parentId, create a folder with hindsight_kb_create_folder, and change an existing page with hindsight_kb_update. Requires Hindsight client/server knowledge-base support.
+
+| Parameter     | Type                                            | Required | Description                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
+| ------------- | ----------------------------------------------- | -------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `name`        | string                                          | yes      | Page name.                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
+| `sourceQuery` | string                                          | yes      | The question this page documents.                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
+| `parentId`    | string \| null                                  | no       | Folder parent. Omit for root create; pass null on update to move to root.                                                                                                                                                                                                                                                                                                                                                                                                          |
+| `bank`        | string                                          | no       | Bank id or alias project\|user\|global. Defaults to the coding/project bank.                                                                                                                                                                                                                                                                                                                                                                                                       |
+| `tags`        | array<string>                                   | no       | Optional tag override; omitted defaults to source:pi (+ project:<activeId> on the coding bank).                                                                                                                                                                                                                                                                                                                                                                                    |
+| `maxTokens`   | integer                                         | no       | Optional page content cap in tokens.                                                                                                                                                                                                                                                                                                                                                                                                                                               |
+| `tagsMatch`   | any \| all \| any_strict \| all_strict \| exact | no       | How to match tags. Always enforced together with the automatic Pi project/user scope tag filter. 'exact' folds the automatic scope tags into the exact-match set (memory tags must equal scope tags plus these tags, no more, no less) instead of AND-ing a separate scope group, since scope tags must still be present. To also include Hindsight shared/untagged observations (exact empty tags), set includeSharedObservations=true or config.scope.includeSharedObservations. |
+| `dryRun`      | boolean                                         | no       | When true (default), preview only; set false to create.                                                                                                                                                                                                                                                                                                                                                                                                                            |
+
+### `hindsight_kb_create_folder`
+
+Create one knowledge page folder, optionally nested under parentId. dryRun defaults true (preview) — set false to create. Folders group pages; create pages with hindsight_kb_create_page. Requires Hindsight client/server knowledge-base support.
+
+| Parameter  | Type           | Required | Description                                                                  |
+| ---------- | -------------- | -------- | ---------------------------------------------------------------------------- |
+| `name`     | string         | yes      | Folder name.                                                                 |
+| `parentId` | string \| null | no       | Folder parent. Omit for root create; pass null on update to move to root.    |
+| `bank`     | string         | no       | Bank id or alias project\|user\|global. Defaults to the coding/project bank. |
+| `dryRun`   | boolean        | no       | When true (default), preview only; set false to create.                      |
+
+### `hindsight_kb_update`
+
+Patch one knowledge page or folder by id: name, parentId, sourceQuery, tags, and/or maxTokens (at least one required). Pass parentId null to move it back to the root. dryRun defaults true (preview) — set false to write. Read the target with hindsight_kb_get first. Requires Hindsight client/server knowledge-base support.
+
+| Parameter     | Type           | Required | Description                                                                  |
+| ------------- | -------------- | -------- | ---------------------------------------------------------------------------- |
+| `id`          | string         | yes      | Page or folder id to update.                                                 |
+| `bank`        | string         | no       | Bank id or alias project\|user\|global. Defaults to the coding/project bank. |
+| `name`        | string         | no       | New page or folder name.                                                     |
+| `parentId`    | string \| null | no       | Folder parent. Omit for root create; pass null on update to move to root.    |
+| `sourceQuery` | string         | no       | New page question.                                                           |
+| `tags`        | array<string>  | no       | New tag list for the page.                                                   |
+| `maxTokens`   | integer        | no       | New page content cap in tokens.                                              |
+| `dryRun`      | boolean        | no       | When true (default), preview only; set false to write.                       |
+
+### `hindsight_kb_delete`
+
+Delete one knowledge page or folder by id. dryRun defaults true (preview) — set false to delete; Pi cannot restore it. Confirm the target with hindsight_kb_get or hindsight_kb_tree first. Requires Hindsight client/server knowledge-base support.
+
+| Parameter | Type    | Required | Description                                                                  |
+| --------- | ------- | -------- | ---------------------------------------------------------------------------- |
+| `id`      | string  | yes      | Page or folder id to delete.                                                 |
+| `bank`    | string  | no       | Bank id or alias project\|user\|global. Defaults to the coding/project bank. |
+| `dryRun`  | boolean | no       | When true (default), preview only; set false to delete.                      |
+
+### `hindsight_kb_seed_taxonomy`
+
+Seed the fixed five-page coding knowledge taxonomy (idempotent; tags knowledge:component|concept|convention|decision|feature-work). dryRun defaults true (preview) — set false to apply. Degrades with knowledge_pages_unavailable when the client/server lacks knowledge-base APIs. Use hindsight_kb_create_page for one custom page instead.
+
+| Parameter | Type    | Required | Description                                                                  |
+| --------- | ------- | -------- | ---------------------------------------------------------------------------- |
+| `bank`    | string  | no       | Bank id or alias project\|user\|global. Defaults to the coding/project bank. |
+| `dryRun`  | boolean | no       | When true (default), preview only; set false to apply.                       |
+
+### `hindsight_kb_export`
+
+Export the whole bank knowledge base as one portable markdown bundle. Heavy and read-only — use it only for a full export/backup, not routine reading (that is hindsight_kb_search + hindsight_kb_get). Requires Hindsight client/server knowledge-base support.
+
+| Parameter | Type   | Required | Description                                                                  |
+| --------- | ------ | -------- | ---------------------------------------------------------------------------- |
+| `bank`    | string | no       | Bank id or alias project\|user\|global. Defaults to the coding/project bank. |
 
 ### `hindsight_scope_migrate`
 

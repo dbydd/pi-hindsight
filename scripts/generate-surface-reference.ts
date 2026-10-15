@@ -86,16 +86,16 @@ function createDeps(): MemoryOperationsDeps {
 
 function supportScopeForTool(name: string): string {
   if (
-    [
-      "hindsight_retain",
-      "hindsight_retain_global",
-      "hindsight_recall",
-      "hindsight_reflect",
-    ].includes(name)
+    ["hindsight_retain", "hindsight_retain_user", "hindsight_recall", "hindsight_reflect"].includes(
+      name,
+    )
   ) {
     return "core 1.0";
   }
   if (/templates?|bank_config/.test(name)) return "capability-gated 1.0";
+  // Split families keep the scope of the combined tool they came from:
+  // mm_* was hindsight_mental_model, kb_* was hindsight_knowledge.
+  if (/_(mm|kb)_/.test(name)) return "capability-gated 1.0";
   if (
     name.includes("import") ||
     name.includes("queue") ||
@@ -123,7 +123,7 @@ const deferredSurfaces = [
   [
     "Cross-bank list/create",
     "Deferred",
-    "No public `list_banks` or arbitrary cross-bank `create_bank` tool in 1.0.",
+    "No public Hindsight-side `list_banks` or arbitrary cross-bank `create_bank` tool in 1.0. `hindsight_bank_list` lists only the Pi-configured banks.",
   ],
   [
     "Full-bank deletion",

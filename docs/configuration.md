@@ -140,7 +140,7 @@ no global switch beyond `retain.enabled`.
 - `decision` — the entry is offered to the decision layer, which answers one question per entry.
   This is the only mode that makes the decision model decide anything about writes.
 - `explicit-only` — the entry is never written automatically; `hindsight_retain` and
-  `hindsight_retain_global` can still write it.
+  `hindsight_retain_user` can still write it.
 
 Write candidates are entries that are `enabled`, are not `access: "read"`, are not
 `retain.enabled: false`, and are not `explicit-only`. The coding-role entry (the `project` alias, the
@@ -293,7 +293,7 @@ User/life bank recall filter (`any_strict`) for automatic inject and `hindsight_
 
 An empty array (`[]`) disables the tag filter so anything in that bank can be recalled (bank-level isolation only). Invalid values fall back to the default. Do not remove `harness:pi` if you still want observation recall from the user bank under a tag filter.
 
-Agents can get and patch this field through `hindsight_config` as `userScopeTags` (string array; empty array allowed). Patches write `scope.userScopeTags`. There is no TUI field.
+Agents can read this field through `hindsight_config_get` and patch it through `hindsight_config_set` as `userScopeTags` (string array; empty array allowed). Patches write `scope.userScopeTags`. There is no TUI field.
 
 ```json
 {
@@ -373,7 +373,7 @@ Runs a local argv command immediately before Retain Queue admission. The command
 a shell and receives canonical, sanitized Retain Job JSON on stdin. Exit `0` allows the job into the
 queue; nonzero exit, timeout, spawn failure, or malformed config blocks before queue/Hindsight calls.
 Stdout and stderr are discarded so checker output cannot leak into Pi logs. Absent by default; not
-writable through `hindsight_config`.
+writable through `hindsight_config_set`.
 
 ```json
 {
