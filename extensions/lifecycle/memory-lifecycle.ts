@@ -36,6 +36,9 @@ import {
 } from "./memory-lifecycle-runtime.js";
 import { createRetainTurnPolicy } from "./memory-lifecycle-retain.js";
 import { createRecallTurnPolicy } from "./memory-lifecycle-recall.js";
+import { createDecisionLayer, type DecisionLayer } from "../decision/decision.js";
+import { degradedDecisionHost } from "../decision/host.js";
+import type { DecisionHost, TodoState } from "../decision/types.js";
 
 export interface InitHealthFailure {
   subsystem: "project-bank" | "user-bank";
@@ -56,6 +59,17 @@ export interface MemoryLifecycleDeps {
   reloadConfig(cwd: string, sessionFile?: string): void;
 }
 
+/**
+ * Host surfaces the decision layer needs, supplied by the extension entry point
+ * because only it sees the live extension context and the host event bus.
+ */
+export interface MemoryLifecycleDecisionAdapters {
+  /** Build the decision host for this session; a throw or undefined degrades. */
+  loadDecisionHost?: () => Promise<DecisionHost | undefined>;
+  /** Task-state reader for the decision prompt; a throw yields `unknown`. */
+  readTodo?: () => TodoState | Promise<TodoState>;
+}
+
 export interface MemoryLifecycle {
   deps: MemoryLifecycleDeps;
   initialize(ctx: RuntimeCtx): Promise<void>;
@@ -70,6 +84,7 @@ export interface MemoryLifecycle {
 export function createMemoryLifecycle(
   initialCwd: string = process.cwd(),
   observer?: RetrievalObserver,
+  decisionAdapters?: MemoryLifecycleDecisionAdapters,
 ): MemoryLifecycle {
   let config: ResolvedConfig = resolveConfig(initialCwd);
   let client: HindsightLikeClient = createHindsightClient(config);
@@ -77,6 +92,8 @@ export function createMemoryLifecycle(
   let initHealth: InitHealth | undefined;
   let periodicFlush: NodeJS.Timeout | undefined;
   let periodicFlushActive = false;
+  let decisionHost: DecisionHost | undefined;
+  let decisionLayer: DecisionLayer | undefined;
   const stopPeriodicFlush = () => {
     if (!periodicFlush) return;
     clearInterval(periodicFlush);
@@ -88,6 +105,27 @@ export function createMemoryLifecycle(
     config = resolveConfig(cwd, process.env, sessionFile);
     client = createHindsightClient(config);
     projectBankId = deriveProjectBankId(cwd, config);
+  };
+
+  /**
+   * Build or drop the decision host for this session. Routing is per-session
+   * opt-in: it is only wired when `recall.mode` or `recall.bankMode` asks for a
+   * decision, and every failure leaves the degraded host in place, so the recall
+   * path always has a layer that falls back instead of costing a turn its memory.
+   */
+  const refreshDecisionHost = async (): Promise<void> => {
+    decisionHost = undefined;
+    decisionLayer = undefined;
+    if (config.recall.mode !== "decision" && config.recall.bankMode !== "decision") return;
+    if (!decisionAdapters?.loadDecisionHost) {
+      decisionHost = degradedDecisionHost();
+      return;
+    }
+    try {
+      decisionHost = (await decisionAdapters.loadDecisionHost()) ?? degradedDecisionHost();
+    } catch {
+      decisionHost = degradedDecisionHost();
+    }
   };
 
   const startPeriodicFlush = (runtime: RuntimeSnapshot) => {
@@ -152,10 +190,21 @@ export function createMemoryLifecycle(
     notify,
   });
 
+  const readTodo = decisionAdapters?.readTodo;
   const recallPolicy = createRecallTurnPolicy({
     ...(observer ? { observer } : {}),
     getConfig: () => config,
     getClient: () => client,
+    getDecisionLayer: () => {
+      if (!decisionHost) return undefined;
+      decisionLayer ??= createDecisionLayer({
+        host: decisionHost,
+        getConfig: () => config,
+        ...(observer ? { observer } : {}),
+        ...(readTodo ? { readTodo: () => readTodo() } : {}),
+      });
+      return decisionLayer;
+    },
     setMemoryStatus: (runtime, activity, memoryCount) =>
       setMemoryStatus(runtime, activity, memoryCount),
     notify,
@@ -197,6 +246,7 @@ export function createMemoryLifecycle(
         if (config.notifications.startup) notify(runtime, setupRequiredMessage(), "warning");
         return;
       }
+      await refreshDecisionHost();
       const failures: InitHealthFailure[] = [];
       let ensureSucceeded = false;
       const coding = codingBankEntry(config);

@@ -47,6 +47,13 @@ export type StatusStyle = "off" | "text" | "emoji" | "nerdfont";
 export type StatusDetail = "minimal" | "project" | "activity" | "verbose";
 export type RecallRole = "user" | "assistant" | "tool" | "system";
 export type RecallInjectionPosition = "prepend" | "append";
+/**
+ * When automatic recall runs: every context hook, when the decision model says
+ * so, on a turn/time interval, or never (explicit tools only).
+ */
+export type RecallMode = "every-turn" | "decision" | "interval" | "manual";
+/** Which enabled readable banks automatic recall reads: all of them, or the decision model's pick. */
+export type RecallBankMode = "all" | "decision";
 export type GlobalRetainMode = "explicit-only";
 export type ImportMode = "curated" | "raw" | "forensic";
 export type ImportQualityProfile = "compatible" | "strict";
@@ -224,6 +231,14 @@ export interface ResolvedConfig {
     includeFactsInDebug: boolean;
     queryTimestamp?: string;
     preferObservations: boolean;
+    /** When automatic recall runs. Default `every-turn`. */
+    mode: RecallMode;
+    /** Bank selection for automatic recall. Default `all`. */
+    bankMode: RecallBankMode;
+    /** `interval` mode: recall at most every N context-hook turns. */
+    everyNTurns: number;
+    /** `interval` mode: minimum milliseconds between two successful recalls. */
+    minIntervalMs: number;
     /** Optional local floors for automatic recall injection. Omitted by default. */
     minScores?: RecallMinScores;
   };

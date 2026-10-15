@@ -70,6 +70,10 @@ export const DEFAULT_CONFIG: ResolvedConfig = {
     injectionPosition: "append",
     includeFactsInDebug: false,
     preferObservations: true,
+    mode: "every-turn",
+    bankMode: "all",
+    everyNTurns: 5,
+    minIntervalMs: 0,
   },
   observations: {
     enabled: true,

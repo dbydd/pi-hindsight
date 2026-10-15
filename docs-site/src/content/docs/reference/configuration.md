@@ -192,6 +192,8 @@ Paths below are Pi's resolved defaults; see [Host config paths](#host-config-pat
     "timeoutMs": 40000,
     "cacheTtlMs": 60000,
     "injectionPosition": "append",
+    "mode": "every-turn",
+    "bankMode": "all",
     "minScores": {
       "reranker": 0.2,
       "semantic": 0.65
@@ -263,6 +265,55 @@ top-k without score thresholds). When set, drop candidates whose returned `score
 
 Behavior, why defaults stay off, and a suggested starting floor: [Memory behavior → Recall quality](/pi-hindsight/concepts/memory-behavior/#recall-quality).
 
+### `recall.mode`
+
+When automatic recall runs. Four values:
+
+- `every-turn` (default) — every context hook recalls, exactly as before. The decision model is not
+  called unless `recall.bankMode` asks for it.
+- `decision` — the decision model decides whether this turn injects at all; a "no" skips the turn
+  without a recall call or injection.
+- `interval` — recall only when both `recall.everyNTurns` context hooks have passed and
+  `recall.minIntervalMs` has elapsed since the last recall a server answered. No decision call.
+- `manual` — automatic recall is off; only explicit tools (`hindsight_recall`, `hindsight_reflect`)
+  reach memory.
+
+```json
+{
+  "recall": {
+    "mode": "interval",
+    "everyNTurns": 5,
+    "minIntervalMs": 300000
+  }
+}
+```
+
+`everyNTurns` (default `5`) counts context hooks; `minIntervalMs` (default `0`, meaning no time gate)
+counts milliseconds since the last successful recall. Both gates must be satisfied, so one of them
+throttles on its own and `interval` with defaults recalls on every fifth turn.
+
+### `recall.bankMode`
+
+Which banks automatic recall reads.
+
+- `all` (default) — every enabled, readable `banks` entry, in config order. Unchanged behavior.
+- `decision` — the decision model picks the turn's read banks from that same candidate list. The
+  picked entry ids replace the scope set for the turn; tag derivation and injection position are
+  unchanged.
+
+```json
+{
+  "recall": { "bankMode": "decision" },
+  "decision": { "fallback": { "recallBanks": ["coding"] } }
+}
+```
+
+When the decision model cannot answer, the read set comes from `decision.fallback.recallBanks`, then
+`banksFallback`, both filtered to enabled, readable entries. A `bankMode: "decision"` config with an
+empty fallback list therefore reads nothing on a failed decision — set `banksFallback` (or
+`decision.fallback.recallBanks`) whenever you enable it. A model that answers "no banks" skips the
+turn too.
+
 ### `retain.beforeEnqueue` (optional)
 
 Runs a local argv command immediately before Retain Queue admission. The command is spawned without
@@ -326,6 +377,6 @@ classifier, then a text bridge over any chat model — and ends at the fallback 
 recall on and never raises into the calling turn, so an unreachable decision model costs routing
 quality instead of memory.
 
-**Status.** This branch ships the decision core. The automatic recall and retain paths still use
-their own bank selection until the wiring slice lands, so the settings above describe a layer that
-is not yet wired into those paths.
+**Status.** Automatic recall is wired: `recall.mode: "decision"` reads gate A and
+`recall.bankMode: "decision"` reads gate B. Automatic retain still selects its own banks, so the
+write half of the table above is not user-visible yet.
