@@ -59,4 +59,22 @@ Available for the agent (control plane is agent-first; TUI is thin):
 - `hindsight_knowledge` — tree/search/get/export/create_page/create_folder/update/delete for knowledge pages (mutating dry-run default; requires knowledge-base-capable client/server; pages are tool-driven, not auto-injected; export = full-bank markdown bundle only)
 - `hindsight_scope_migrate` — dry-run dual-tag / legacy `repo:` migration plan + local receipt (never rewrites)
 
+### Tool exposure and discovery
+
+Exposure is generated from one table (`extensions/operations/tool-presentation.ts`) and stamped on each registered tool; the same object carries both hosts' marks, and each host reads only its own key.
+
+**Resident** — kept on the agent's top-level tool surface:
+
+- `hindsight_recall`, `hindsight_retain`, `hindsight_reflect`, `hindsight_status`
+
+**Cold path** — moved behind on-demand discovery:
+
+- `hindsight_retain_global`, `hindsight_seed_git`, `hindsight_scope`, `hindsight_config`, `hindsight_bank`, `hindsight_mental_model`, `hindsight_knowledge`, `hindsight_scope_migrate`
+- Any tool added later without a resident entry lands here too (cold path is the default).
+
+Host controls:
+
+- **omp** reads `loadMode`. `essential` (resident) keeps the tool on the top-level surface; `discoverable` (cold path) puts it behind `xd://` discovery. `tools.xdevDocs` sets how device docs are surfaced (default `catalog`), and `tools.xdevInlineDevices` is an allowlist of devices whose docs are inlined into the prompt.
+- **pi** reads `exposure`. `direct` (resident) is active as soon as the extension registers it; `deferred` (cold path) must be activated — with `--tools` / `defaultTools` at session start, or `setActiveTools` mid-session — and stays reachable through tool search when it is not active.
+
 See the generated [surface reference](surface-reference.md) for parameter schemas.

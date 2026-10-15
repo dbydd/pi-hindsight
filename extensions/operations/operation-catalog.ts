@@ -6,6 +6,7 @@ import {
 } from "@earendil-works/pi-coding-agent";
 import type { MemoryOperations, MemoryOperationsDeps } from "./memory-operation-service.js";
 import { formatReflectResult } from "./reflect-presenter.js";
+import { toolPresentation } from "./tool-presentation.js";
 import { renderMemoryToolTextResult, retainToolResponse } from "../tui/tool-presenters.js";
 import { getSessionFile } from "../utils/session.js";
 import { hostConfigDirName } from "../config/paths.js";
@@ -162,7 +163,17 @@ export function createOperationCatalog(deps: MemoryOperationsDeps): OperationCat
   function defineCatalogTool<TParams extends ToolDefinition["parameters"], TDetails = unknown>(
     tool: ToolDefinition<TParams, TDetails>,
   ): ToolOperation {
-    const defined = defineTool(tool);
+    // Single exposure boundary. `loadMode` (read by omp's `wrapper.ts` off the object
+    // handed to `registerTool`) and `exposure` (read by pi) are host runtime keys that
+    // the installed Pi `ToolDefinition` does not declare. `defineTool` passes unknown
+    // fields through untouched, so merge the marks here — the one place that knows both
+    // vocabularies — and narrow back to the host type; the marks ride along onto the
+    // registered object.
+    const marked = {
+      ...tool,
+      ...toolPresentation(tool.name),
+    } as ToolDefinition<TParams, TDetails>;
+    const defined = defineTool(marked);
     const execute = defined.execute.bind(defined);
     return {
       ...defined,

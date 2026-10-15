@@ -63,6 +63,24 @@ Pi exposes memory tools plus an agent control plane for selected banks:
 
 Platform-wide bank list/delete and full control-plane browsing stay in the Hindsight web UI. Bundled mental-model templates remain available from the hub (`t`).
 
+### Tool exposure and discovery
+
+Exposure is generated from one table (`extensions/operations/tool-presentation.ts`) and stamped on each registered tool; the same object carries both hosts' marks, and each host reads only its own key.
+
+**Resident** — kept on the agent's top-level tool surface:
+
+- `hindsight_recall`, `hindsight_retain`, `hindsight_reflect`, `hindsight_status`
+
+**Cold path** — moved behind on-demand discovery:
+
+- `hindsight_retain_global`, `hindsight_seed_git`, `hindsight_scope`, `hindsight_config`, `hindsight_bank`, `hindsight_mental_model`, `hindsight_knowledge`, `hindsight_scope_migrate`
+- Any tool added later without a resident entry lands here too (cold path is the default).
+
+Host controls:
+
+- **omp** reads `loadMode`. `essential` (resident) keeps the tool on the top-level surface; `discoverable` (cold path) puts it behind `xd://` discovery. `tools.xdevDocs` sets how device docs are surfaced (default `catalog`), and `tools.xdevInlineDevices` is an allowlist of devices whose docs are inlined into the prompt.
+- **pi** reads `exposure`. `direct` (resident) is active as soon as the extension registers it; `deferred` (cold path) must be activated — with `--tools` / `defaultTools` at session start, or `setActiveTools` mid-session — and stays reachable through tool search when it is not active.
+
 Tool notes:
 
 - In Pi's interactive TUI, memory tool outputs share one normalized text renderer and support the normal tool-output expansion toggle (`Ctrl+O` by default). Short outputs render in the same model without needing to fold; long outputs render as compact previews until expanded.
