@@ -5,6 +5,7 @@ import { join } from "node:path";
 import { resolveConfig } from "../extensions/config/config.js";
 import { DEFAULT_CONFIG } from "../extensions/config/config-defaults.js";
 import {
+  bankEntryEnabled,
   canReadBank,
   canWriteBank,
   codingBankEntry,
@@ -64,6 +65,43 @@ describe("banks array normalization", () => {
     ]);
     expect(entries[0]!.derive).toBeUndefined();
     expect(entries[0]!.mission).toEqual({ retain: "r" });
+  });
+
+  it("takes the id from the alias, so one field declares a role bank", () => {
+    const entries = normalizeBankEntries([{ alias: "project", derive: "basename" }]);
+    expect(entries).toEqual([{ id: "project", alias: "project", derive: "basename" }]);
+  });
+
+  it("reads a reserved name as the alias when the id carries it", () => {
+    const entries = normalizeBankEntries([
+      { id: "project", derive: "cwd" },
+      { id: "user", bankId: "life-bank" },
+    ]);
+    expect(entries).toEqual([
+      { id: "project", alias: "project", derive: "cwd" },
+      { id: "user", alias: "user", bankId: "life-bank" },
+    ]);
+    expect(codingBankEntry(config({ banks: entries }))?.id).toBe("project");
+    expect(userBankEntry(config({ banks: entries }))?.bankId).toBe("life-bank");
+  });
+
+  it("keeps derive only on a coding entry", () => {
+    expect(normalizeBankEntries([{ id: "notes", derive: "basename" }])).toEqual([{ id: "notes" }]);
+    expect(normalizeBankEntries([{ id: "user", derive: "basename" }])).toEqual([
+      { id: "user", alias: "user" },
+    ]);
+  });
+
+  it("leaves a shortest-form entry enabled and read-write", () => {
+    const entries = normalizeBankEntries([{ alias: "project" }]);
+    expect(entries).toEqual([{ id: "project", alias: "project" }]);
+    expect(bankEntryEnabled(entries[0]!)).toBe(true);
+    expect(canReadBank(entries[0]!)).toBe(true);
+    expect(canWriteBank(entries[0]!)).toBe(true);
+  });
+
+  it("still drops an entry that names no id and no alias", () => {
+    expect(normalizeBankEntries([{ bankId: "orphan" }])).toEqual([]);
   });
 });
 

@@ -71,7 +71,7 @@ When a profile uses user memory, guided setup asks for a user bank ID and writes
 
 ## Bank list (`banks`)
 
-`banks` is an **ordered array** of bank entries. Each entry needs a stable `id`; the two reserved role aliases are `alias: "project"` (coding) and `alias: "user"` (life).
+`banks` is an **ordered array** of bank entries. Each entry needs a stable `id`; the two reserved role names are `project` (coding) and `user` (life). An entry may carry one as its `id` or as its `alias` — both mean the same role bank, so the shortest form is a single field: `{ "alias": "project" }` is an enabled, read-write coding bank whose bank is derived from the repo path.
 
 ```jsonc
 {
@@ -95,16 +95,16 @@ When a profile uses user memory, guided setup asks for a user bank ID and writes
 }
 ```
 
-| Field           | Meaning                                                                                                           |
-| --------------- | ----------------------------------------------------------------------------------------------------------------- |
-| `id`            | Stable unique key. Layers merge by `id`; tools and the decision model reference it.                               |
-| `alias`         | `project` or `user`. Keeps the coding / life role semantics (tags, `derive`, shared observations).                |
-| `bankId`        | Concrete Hindsight bank. Required for `alias: "user"`; optional for coding entries.                               |
-| `enabled`       | Defaults to `true`. `{ "id": "x", "enabled": false }` disables a bank from any layer.                             |
-| `access`        | `read`, `write`, or `read-write` (default). Read paths skip `write` entries; write paths skip `read` entries.     |
-| `derive`        | Only meaningful for `alias: "project"`: `repo`, `cwd`, `manual`, `basename`.                                      |
-| `tagGroups`     | Explicit Hindsight tag groups; replaces derived tags for that entry.                                              |
-| `banksFallback` | Bank ids used when the decision model fails or returns unusable output. Replaced wholesale per layer, not merged. |
+| Field           | Meaning                                                                                                                                                     |
+| --------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `id`            | Stable unique key. Layers merge by `id`; tools and the decision model reference it. Defaults to `alias`.                                                    |
+| `alias`         | `project` or `user`. Keeps the coding / life role semantics (tags, `derive`, shared observations). Implied by a reserved `id`, and supplies a missing `id`. |
+| `bankId`        | Concrete Hindsight bank. Required for `alias: "user"`; optional for coding entries.                                                                         |
+| `enabled`       | Defaults to `true`. `{ "id": "x", "enabled": false }` disables a bank from any layer.                                                                       |
+| `access`        | `read`, `write`, or `read-write` (default). Read paths skip `write` entries; write paths skip `read` entries.                                               |
+| `derive`        | Only read on a coding entry (`project` role): `repo`, `cwd`, `manual`, `basename`. Ignored elsewhere.                                                       |
+| `tagGroups`     | Explicit Hindsight tag groups; replaces derived tags for that entry.                                                                                        |
+| `banksFallback` | Bank ids used when the decision model fails or returns unusable output. Replaced wholesale per layer, not merged.                                           |
 
 **Layer merge:** global Pi config is the base and the repo config overlays it. Entries merge by `id` — field-level, with `mission`, `recall`, and `retain` merged one level deeper and `tagGroups` replaced whole. A new `id` appends to the tail, so recall order stays stable. `banksFallback` is replaced wholesale.
 

@@ -20,6 +20,12 @@ export const BANK_RETAIN_MODE_VALUES = ["always", "decision", "explicit-only"] a
 const LEGACY_PROJECT_KEYS = ["project", "coding"] as const;
 const LEGACY_USER_KEYS = ["user", "global", "life"] as const;
 
+/**
+ * Reserved role names an entry may carry as its `id` instead of repeating them in
+ * `alias`: `{ "id": "project" }` and `{ "alias": "project" }` mean the same entry.
+ */
+const RESERVED_BANK_ALIAS: Record<string, BankAlias> = { project: "project", user: "user" };
+
 export function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
@@ -95,10 +101,17 @@ function retainFromRaw(raw: unknown): BankEntryRetainSettings | undefined {
  */
 export function normalizeBankEntry(raw: unknown): BankConfigEntry | undefined {
   if (!isRecord(raw)) return undefined;
-  const id = trimmedString(raw.id);
+  const declaredId = trimmedString(raw.id);
+  // Shortest form is `{ "alias": "project" }`: the alias then supplies the id.
+  const declaredAlias = oneOf(raw.alias, BANK_ALIAS_VALUES);
+  const alias =
+    declaredAlias ??
+    (declaredId && Object.hasOwn(RESERVED_BANK_ALIAS, declaredId)
+      ? RESERVED_BANK_ALIAS[declaredId]
+      : undefined);
+  const id = declaredId ?? alias;
   if (!id) return undefined;
   const entry: BankConfigEntry = { id };
-  const alias = oneOf(raw.alias, BANK_ALIAS_VALUES);
   if (alias) entry.alias = alias;
   const bankId = trimmedString(raw.bankId);
   if (bankId) entry.bankId = bankId;
@@ -108,8 +121,11 @@ export function normalizeBankEntry(raw: unknown): BankConfigEntry | undefined {
   if (access) entry.access = access;
   const description = trimmedString(raw.description);
   if (description) entry.description = description;
-  const derive = oneOf(raw.derive, BANK_DERIVE_VALUES);
-  if (derive) entry.derive = derive;
+  // Derivation names the coding entry's bank, so it carries no meaning elsewhere.
+  if (alias === "project") {
+    const derive = oneOf(raw.derive, BANK_DERIVE_VALUES);
+    if (derive) entry.derive = derive;
+  }
   const mission = missionFromRaw(raw.mission);
   if (mission) entry.mission = mission;
   const recall = recallFromRaw(raw.recall);
@@ -136,28 +152,17 @@ function legacyMission(raw: Record<string, unknown>): BankEntryMission | undefin
   return Object.keys(out).length > 0 ? out : undefined;
 }
 
+/**
+ * One legacy slot object, read through the same field mapping as an array entry so
+ * the shim and the array form cannot drift. The slot's role names win over the raw
+ * object, and the flat mission field names legacy configs carry are folded in.
+ */
 function legacySlotEntry(raw: unknown, id: string, alias: BankAlias): BankConfigEntry | undefined {
   if (!isRecord(raw)) return undefined;
-  const entry: BankConfigEntry = { id, alias };
-  const bankId = trimmedString(raw.bankId);
-  if (bankId) entry.bankId = bankId;
-  if (typeof raw.enabled === "boolean") entry.enabled = raw.enabled;
-  const access = oneOf(raw.access, BANK_ACCESS_VALUES);
-  if (access) entry.access = access;
-  const description = trimmedString(raw.description);
-  if (description) entry.description = description;
-  const derive = oneOf(raw.derive, BANK_DERIVE_VALUES);
-  if (derive) entry.derive = derive;
-  const mission = missionFromRaw(raw.mission) ?? legacyMission(raw);
-  if (mission) entry.mission = mission;
-  const recall = recallFromRaw(raw.recall);
-  if (recall) entry.recall = recall;
-  const retain = retainFromRaw(raw.retain);
-  if (retain) entry.retain = retain;
-  if (Array.isArray(raw.tagGroups) && raw.tagGroups.length > 0) {
-    entry.tagGroups = raw.tagGroups as NonNullable<BankConfigEntry["tagGroups"]>;
-  }
-  return entry;
+  const entry = normalizeBankEntry({ ...raw, id, alias });
+  if (!entry) return undefined;
+  const mission = entry.mission ?? legacyMission(raw);
+  return mission ? { ...entry, mission } : entry;
 }
 
 function legacySlotRaw(
