@@ -16,10 +16,18 @@ Environment variables win the effective value. Project/user stored values can st
 
 ## Host config paths
 
-The extension asks the running host where its config directory is rather than hardcoding `.pi`:
+Runtime truth outranks package constants: an omp process still resolves `@earendil-works/*`, and that copy reports pi's `.pi` and `~/.pi/agent`. The extension resolves the host config dir in this order:
 
-- **Global agent dir** — `~/.pi/agent` under Pi, `~/.omp/agent` under omp. `PI_CODING_AGENT_DIR` overrides it.
-- **Project config dir** — `.pi` under Pi, `.omp` under omp. `PI_CONFIG_DIR` overrides it; `.pi` is also the last-resort fallback when the host reports no directory name.
+1. `PI_CODING_AGENT_DIR` / `PI_CONFIG_DIR` — explicit override, honored by both hosts
+2. the live session file — `<config dir>/agent/sessions/<project>/<file>.jsonl`
+3. omp's `@oh-my-pi/pi-utils/dirs`, when the omp plugin tree provides it
+4. `@earendil-works/pi-coding-agent` — correct under pi
+5. `$HOME/<dir>/agent` — `<dir>` is `PI_CONFIG_DIR`, else the last-resort `.pi`
+
+That yields:
+
+- **Global agent dir** — `~/.pi/agent` under Pi, `~/.omp/agent` under omp.
+- **Project config dir** — `.pi` under Pi, `.omp` under omp.
 - **Project state dir** — `<project config dir>/hindsight`. `recall.lastRecallPath`, `retain.queuePath`, `import.manifestPath`, and `import.checkpointPath` all default inside it, so sidecars, queues, cursors, receipts, and import checkpoints follow the same host.
 
 ## Common environment variables

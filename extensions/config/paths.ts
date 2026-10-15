@@ -1,58 +1,183 @@
 /**
- * Runtime-computed config path helpers.
+ * Runtime-resolved host config paths.
  *
- * The host (pi or omp) owns the global config directory: pi resolves
- * `~/.pi/agent` via `getAgentDir()` (honoring `PI_CODING_AGENT_DIR`) and
- * `CONFIG_DIR_NAME`, omp remaps both through its legacy shim (honoring
- * `PI_CODING_AGENT_DIR`, `PI_CONFIG_DIR`, and profiles). Never hardcode `.pi`
- * or `$HOME` as a path base — probe the running host instead.
+ * The host (pi or omp) owns the global config dir, and package constants cannot be
+ * trusted to identify it: a pi-hindsight copy loaded by omp resolves
+ * `@earendil-works/*` from its own tree, and that copy reports pi's `.pi` and
+ * `~/.pi/agent` even inside an omp process. Runtime truth therefore outranks the
+ * constants, in this order:
+ *
+ *   1. `PI_CODING_AGENT_DIR` / `PI_CONFIG_DIR` — explicit override, both hosts honor them
+ *   2. the live session file — `<config dir>/agent/sessions/<project>/<file>.jsonl`
+ *   3. `@oh-my-pi/pi-utils/dirs` — shipped in the omp plugin tree, absent from pi's
+ *   4. `@earendil-works/pi-coding-agent` — correct under pi
+ *   5. `$HOME/<dir>/agent` — `<dir>` is `PI_CONFIG_DIR` or `.pi`
+ *
+ * Levels 2-4 describe the live process. An injected env (tests, diagnostics) resolves
+ * from its own variables plus an explicit `sessionFile`, never from ambient state, so
+ * tests cannot accidentally read the developer's real config.
  */
-import { join } from "node:path";
+import { basename, dirname, join } from "node:path";
 import { CONFIG_DIR_NAME, getAgentDir } from "@earendil-works/pi-coding-agent";
 
-/** Project-local config directory name for the running host (".pi" or ".omp"). */
-export function hostConfigDirName(): string {
-  if (typeof CONFIG_DIR_NAME === "string" && CONFIG_DIR_NAME) return CONFIG_DIR_NAME;
-  return process.env.PI_CONFIG_DIR || ".pi";
+const CONFIG_DIR_FALLBACK = ".pi";
+const AGENT_DIR_NAME = "agent";
+const SESSIONS_DIR_NAME = "sessions";
+const SESSION_FILE_SUFFIX = ".jsonl";
+
+/**
+ * omp's own dirs module. It exists only where omp is installed, so a static import
+ * cannot work: the specifier stays a variable, which also keeps typechecking from
+ * requiring an omp-only package.
+ */
+const OMP_DIRS_MODULE = "@oh-my-pi/pi-utils/dirs";
+
+export interface HostPathsOptions {
+  /** Environment to resolve from; defaults to the live process env. */
+  env?: NodeJS.ProcessEnv | undefined;
+  /** Session file of the live session, when its caller knows it. */
+  sessionFile?: string | undefined;
+}
+
+export interface HostDirsModule {
+  CONFIG_DIR_NAME?: unknown;
+  getAgentDir?: () => unknown;
+}
+
+export type HostDirsLoader = () => Promise<HostDirsModule>;
+
+let runtimeSessionFile: string | undefined;
+let probedHostDirs: { agentDir?: string; configDirName?: string } | undefined;
+let probeRun: Promise<void> | undefined;
+
+/** Session file of the live session; in-memory sessions have none. */
+export function setRuntimeSessionFile(sessionFile: string | undefined): void {
+  runtimeSessionFile = sessionFile;
 }
 
 /**
- * Global agent config directory for the running host, resolved from `env`.
- * The host probe (which covers omp profiles and XDG) is trusted only for the
- * live process env; an injected env resolves from its own variables alone.
- * Returns undefined when `env` carries no home information at all.
+ * Agent dir behind a session file:
+ * `<config dir>/agent/sessions/<project>/<file>.jsonl`. Shape-checked, so an
+ * unexpected layout returns undefined instead of a guess.
  */
-export function resolveAgentDir(env: NodeJS.ProcessEnv = process.env): string | undefined {
-  const injected = env.PI_CODING_AGENT_DIR;
-  if (injected) return injected;
-  if (env === process.env) {
-    try {
-      const dir = getAgentDir();
-      if (typeof dir === "string" && dir) return dir;
-    } catch {
-      // fall through to env-derived resolution
-    }
+export function agentDirFromSessionFile(sessionFile: string | undefined): string | undefined {
+  if (!sessionFile || !sessionFile.endsWith(SESSION_FILE_SUFFIX)) return undefined;
+  const projectDir = dirname(sessionFile);
+  const sessionsDir = dirname(projectDir);
+  const agentDir = dirname(sessionsDir);
+  if (basename(sessionsDir) !== SESSIONS_DIR_NAME) return undefined;
+  if (basename(agentDir) !== AGENT_DIR_NAME) return undefined;
+  if (projectDir === sessionsDir || agentDir === sessionsDir) return undefined;
+  return agentDir;
+}
+
+async function loadOmpHostDirs(): Promise<HostDirsModule> {
+  return (await import(OMP_DIRS_MODULE)) as HostDirsModule;
+}
+
+/**
+ * Read one host-reported value, tolerating a host that refuses to resolve dirs before
+ * its bootstrap ran, or that reports a non-string.
+ */
+function hostReportedString(read: () => unknown): string | undefined {
+  try {
+    const value = read();
+    return typeof value === "string" && value.length > 0 ? value : undefined;
+  } catch {
+    return undefined;
   }
-  const home = env.HOME;
-  if (!home) return undefined;
-  return join(home, env.PI_CONFIG_DIR || hostConfigDirName(), "agent");
+}
+
+function profileFromHostDirs(mod: HostDirsModule): { agentDir?: string; configDirName?: string } {
+  const agentDir = mod.getAgentDir ? hostReportedString(mod.getAgentDir) : undefined;
+  const configDirName = hostReportedString(() => mod.CONFIG_DIR_NAME);
+  return { ...(agentDir ? { agentDir } : {}), ...(configDirName ? { configDirName } : {}) };
+}
+
+/**
+ * Probe level 3 once per process. `loader` is injectable so the omp branch can be
+ * tested without an omp install; the default resolves the omp plugin tree.
+ */
+export function probeHostDirs(loader: HostDirsLoader = loadOmpHostDirs): Promise<void> {
+  probeRun ??= (async () => {
+    try {
+      const probed = profileFromHostDirs(await loader());
+      probedHostDirs = probed.agentDir || probed.configDirName ? probed : undefined;
+    } catch {
+      // pi's tree ships no @oh-my-pi/*: the earendil constants stay authoritative.
+    }
+  })();
+  return probeRun;
+}
+
+/** Forget a previous probe result; process-wide state needs this between tests. */
+export function resetHostProbe(): void {
+  probedHostDirs = undefined;
+  probeRun = undefined;
+}
+
+function configDirNameFromAgentDir(agentDir: string): string | undefined {
+  const name = basename(dirname(agentDir));
+  return name.length > 0 && name !== "/" && name !== "." ? name : undefined;
+}
+
+function liveHostAgentDir(): string | undefined {
+  return hostReportedString(getAgentDir);
+}
+
+interface HostProfile {
+  agentDir: string | undefined;
+  configDirName: string;
+}
+
+function hostProfile(options: HostPathsOptions): HostProfile {
+  const env = options.env ?? process.env;
+  const live = env === process.env;
+  const sessionFile = options.sessionFile ?? (live ? runtimeSessionFile : undefined);
+  const sessionAgentDir = agentDirFromSessionFile(sessionFile);
+  const sessionDirName = sessionAgentDir ? configDirNameFromAgentDir(sessionAgentDir) : undefined;
+  const probe = live ? probedHostDirs : undefined;
+  const packageDirName = hostReportedString(() => CONFIG_DIR_NAME);
+  const configDirName =
+    env.PI_CONFIG_DIR ||
+    sessionDirName ||
+    probe?.configDirName ||
+    (live ? packageDirName : undefined) ||
+    CONFIG_DIR_FALLBACK;
+  const agentDir =
+    env.PI_CODING_AGENT_DIR ||
+    sessionAgentDir ||
+    probe?.agentDir ||
+    (live ? liveHostAgentDir() : undefined) ||
+    (env.HOME ? join(env.HOME, configDirName, AGENT_DIR_NAME) : undefined);
+  return { agentDir, configDirName };
+}
+
+/** Project-local config directory name for the running host (".pi" or ".omp"). */
+export function hostConfigDirName(options: HostPathsOptions = {}): string {
+  return hostProfile(options).configDirName;
+}
+
+/**
+ * Global agent config directory, or undefined when the environment names no location
+ * and no host reports one.
+ */
+export function resolveAgentDir(options: HostPathsOptions = {}): string | undefined {
+  return hostProfile(options).agentDir;
 }
 
 /** Project-local hindsight runtime state directory. */
-export function projectStateDir(cwd: string): string {
-  return join(cwd, hostConfigDirName(), "hindsight");
+export function projectStateDir(cwd: string, options: HostPathsOptions = {}): string {
+  return join(cwd, hostConfigDirName(options), "hindsight");
 }
 
 /** Project-local hindsight config base path (without .json/.jsonc). */
-export function projectConfigBasePath(cwd: string): string {
-  return join(cwd, hostConfigDirName(), "hindsight");
+export function projectConfigBasePath(cwd: string, options: HostPathsOptions = {}): string {
+  return join(cwd, hostConfigDirName(options), "hindsight");
 }
 
-/**
- * Global hindsight config base path (without .json/.jsonc), or undefined when
- * `env` carries no global config directory.
- */
-export function globalConfigBasePath(env: NodeJS.ProcessEnv = process.env): string | undefined {
-  const agentDir = resolveAgentDir(env);
+/** Global hindsight config base path (without .json/.jsonc). */
+export function globalConfigBasePath(options: HostPathsOptions = {}): string | undefined {
+  const agentDir = resolveAgentDir(options);
   return agentDir === undefined ? undefined : join(agentDir, "hindsight");
 }

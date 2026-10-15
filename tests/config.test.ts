@@ -621,7 +621,7 @@ describe("resolveConfig", () => {
   it("reads the global config from the home named by the env, not the process home", () => {
     const cwd = tmp();
     const home = tmp();
-    const agentDir = join(home, hostConfigDirName(), "agent");
+    const agentDir = join(home, hostConfigDirName({ env: { HOME: home } }), "agent");
     mkdirSync(agentDir, { recursive: true });
     writeFileSync(join(agentDir, "hindsight.json"), JSON.stringify({ recall: { maxTokens: 321 } }));
     expect(resolveConfig(cwd, { HOME: home }).recall.maxTokens).toBe(321);

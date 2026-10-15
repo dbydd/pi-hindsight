@@ -101,12 +101,13 @@ export function migrateUserMemoryConfigFile(
 export function migrateUserMemoryConfigFiles(
   cwd: string,
   env: NodeJS.ProcessEnv = process.env,
+  sessionFile?: string,
 ): ConfigMigrationResult[] {
   const results: ConfigMigrationResult[] = [];
-  const globalBase = globalConfigBasePath(env);
+  const globalBase = globalConfigBasePath({ env, sessionFile });
   const paths = [
     globalBase === undefined ? undefined : configPath(globalBase),
-    configPath(projectConfigBasePath(cwd)),
+    configPath(projectConfigBasePath(cwd, { env, sessionFile })),
   ].filter((path): path is string => Boolean(path));
   const now = new Date();
   for (const path of paths) {
@@ -158,15 +159,23 @@ function userBankEntryId(banks: unknown): string {
   return id ?? "life";
 }
 
-export function resolveConfig(cwd: string, env: NodeJS.ProcessEnv = process.env): ResolvedConfig {
-  migrateUserMemoryConfigFiles(cwd, env);
+/**
+ * Resolve config for `cwd`. `sessionFile` is the live session's file when the caller
+ * has one; host state paths otherwise fall back to the last registered session.
+ */
+export function resolveConfig(
+  cwd: string,
+  env: NodeJS.ProcessEnv = process.env,
+  sessionFile?: string,
+): ResolvedConfig {
+  migrateUserMemoryConfigFiles(cwd, env, sessionFile);
   // `banks` is a list, so the recursive deep merge below would replace it wholesale.
   // Banks merge by `id` across layers; `banksFallback` is replaced by the last layer.
   let banks: unknown = DEFAULT_CONFIG.banks;
   let banksFallback: unknown;
-  const globalBase = globalConfigBasePath(env);
+  const globalBase = globalConfigBasePath({ env, sessionFile });
   const homeConfig = globalBase === undefined ? undefined : readConfigFile(globalBase);
-  const projectConfig = readConfigFile(projectConfigBasePath(cwd));
+  const projectConfig = readConfigFile(projectConfigBasePath(cwd, { env, sessionFile }));
   let config = merge(DEFAULT_CONFIG, homeConfig);
   config = merge(config, projectConfig);
   for (const layer of [homeConfig, projectConfig]) {
