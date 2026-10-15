@@ -10,6 +10,7 @@ import {
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { resolveConfig } from "../extensions/config/config.js";
+import { codingBankEntry, userBankEntry } from "../extensions/config/banks.js";
 
 function tmp() {
   return mkdtempSync(join(tmpdir(), "pi-hindsight-"));
@@ -34,15 +35,17 @@ describe("resolveConfig", () => {
     expect(config.recall.maxTokens).toBe(123);
     expect(config.import.qualityProfile).toBe("strict");
     expect(config.hindsight.baseUrl).toBe("http://h");
-    expect(config.banks.project.bankId).toBe("manual-bank");
-    expect(config.banks.project.derive).toBe("manual");
-    expect(config.banks.project.retainMission).toBe("Project retain mission");
+    expect(codingBankEntry(config)).toMatchObject({
+      bankId: "manual-bank",
+      derive: "manual",
+      mission: { retain: "Project retain mission" },
+    });
   });
 
   it("accepts opt-in basename derive without changing the default", () => {
     const cwd = tmp();
     const defaults = resolveConfig(cwd, { HINDSIGHT_BASE_URL: "http://h" });
-    expect(defaults.banks.project.derive).toBe("repo");
+    expect(codingBankEntry(defaults)?.derive).toBe("repo");
     expect(defaults.scope.mode).toBe("domain-tagged");
 
     mkdirSync(join(cwd, ".pi"));
@@ -51,8 +54,8 @@ describe("resolveConfig", () => {
       JSON.stringify({ banks: { project: { derive: "basename" } } }),
     );
     const configured = resolveConfig(cwd, { HINDSIGHT_BASE_URL: "http://h" });
-    expect(configured.banks.project.derive).toBe("basename");
-    expect(configured.banks.project.bankId).toBeUndefined();
+    expect(codingBankEntry(configured)?.derive).toBe("basename");
+    expect(codingBankEntry(configured)?.bankId).toBeUndefined();
     expect(configured.scope.mode).toBe("domain-tagged");
   });
 
@@ -108,10 +111,12 @@ describe("resolveConfig", () => {
     );
 
     const config = resolveConfig(cwd);
-    expect(config.banks.project.retainMission).toBe("Project retain");
-    expect(config.banks.project.reflectMission).toBe("Project reflect");
-    expect(config.banks.project.observationsMission).toBe("Project observations");
-    expect(config.banks.global.retainMission).toBe("Global retain");
+    expect(codingBankEntry(config)?.mission).toEqual({
+      retain: "Project retain",
+      reflect: "Project reflect",
+      observations: "Project observations",
+    });
+    expect(userBankEntry(config)?.mission).toEqual({ retain: "Global retain" });
   });
 
   it("normalizes retainStructuredChunkSize in bank mission config", () => {
@@ -125,7 +130,7 @@ describe("resolveConfig", () => {
     );
 
     const config = resolveConfig(cwd);
-    expect(config.banks.project.retainStructuredChunkSize).toBe(4000);
+    expect(codingBankEntry(config)?.mission?.retainStructuredChunkSize).toBe(4000);
   });
 
   it("ignores invalid retainStructuredChunkSize values (negative, fractional, zero)", () => {
@@ -138,7 +143,7 @@ describe("resolveConfig", () => {
       );
 
       const config = resolveConfig(cwd);
-      expect(config.banks.project.retainStructuredChunkSize).toBeUndefined();
+      expect(codingBankEntry(config)?.mission?.retainStructuredChunkSize).toBeUndefined();
     }
   });
 
@@ -228,15 +233,19 @@ describe("resolveConfig", () => {
   it("supports user bank env and keeps legacy global env as fallback", () => {
     const cwd = tmp();
     expect(
-      resolveConfig(cwd, {
-        PI_HINDSIGHT_GLOBAL_BANK_ID: "legacy-global-bank",
-      }).banks.global,
+      userBankEntry(
+        resolveConfig(cwd, {
+          PI_HINDSIGHT_GLOBAL_BANK_ID: "legacy-global-bank",
+        }),
+      ),
     ).toMatchObject({ enabled: true, bankId: "legacy-global-bank" });
     expect(
-      resolveConfig(cwd, {
-        PI_HINDSIGHT_GLOBAL_BANK_ID: "legacy-global-bank",
-        PI_HINDSIGHT_USER_BANK_ID: "user-bank",
-      }).banks.global,
+      userBankEntry(
+        resolveConfig(cwd, {
+          PI_HINDSIGHT_GLOBAL_BANK_ID: "legacy-global-bank",
+          PI_HINDSIGHT_USER_BANK_ID: "user-bank",
+        }),
+      ),
     ).toMatchObject({ enabled: true, bankId: "user-bank" });
   });
 
@@ -266,13 +275,14 @@ describe("resolveConfig", () => {
       name.startsWith("hindsight.json.bak-"),
     );
 
-    expect(config.banks.user).toMatchObject({ enabled: true, bankId: "preferred-user" });
-    expect(config.banks.global).toMatchObject({ enabled: true, bankId: "preferred-user" });
+    expect(userBankEntry(config)).toMatchObject({ enabled: true, bankId: "preferred-user" });
     expect(config.userRetain.mode).toBe("explicit-only");
     expect(config.globalRetain.mode).toBe("explicit-only");
     expect(config.recall.globalQueryPreamble).toBe("Preferred preamble");
     expect(migrated).toMatchObject({
-      banks: { user: { enabled: true, bankId: "preferred-user" } },
+      banks: {
+        user: { enabled: true, bankId: "preferred-user" },
+      },
       userRetain: { mode: "explicit-only" },
       recall: { userQueryPreamble: "Preferred preamble" },
     });
@@ -302,10 +312,10 @@ describe("resolveConfig", () => {
     const config = resolveConfig(cwd);
     const migrated = JSON.parse(readFileSync(path, "utf8")) as Record<string, unknown>;
 
-    expect(config.banks.user).toMatchObject({
+    expect(userBankEntry(config)).toMatchObject({
       enabled: true,
       bankId: "legacy-bank",
-      retainMission: "Legacy retain",
+      mission: { retain: "Legacy retain" },
     });
     expect(config.userRetain.mode).toBe("explicit-only");
     expect(migrated).not.toHaveProperty("banks.global");
@@ -575,9 +585,9 @@ describe("resolveConfig", () => {
     );
     const home = tmp();
     const config = resolveConfig(cwd, { ...process.env, HOME: home });
-    expect(config.banks.project.bankId).toBe("coding-bank");
-    expect(config.banks.user.bankId).toBe("life-bank");
-    expect(config.banks.user.enabled).toBe(true);
+    expect(codingBankEntry(config)?.bankId).toBe("coding-bank");
+    expect(userBankEntry(config)?.bankId).toBe("life-bank");
+    expect(userBankEntry(config)?.enabled).toBe(true);
     expect(config.scope.mode).toBe("domain-tagged");
   });
 

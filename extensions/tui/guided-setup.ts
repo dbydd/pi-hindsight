@@ -2,6 +2,12 @@ import { existsSync } from "node:fs";
 import { join } from "node:path";
 import type { ExtensionCommandContext } from "@earendil-works/pi-coding-agent";
 import {
+  bankEntryEnabled,
+  bankMissionSettings,
+  codingBankEntry,
+  userBankEntry,
+} from "../config/banks.js";
+import {
   ensureGlobalBank,
   ensureProjectBank,
   isNotFoundError,
@@ -110,7 +116,7 @@ export function buildGuidedSetupGlobalPatch(args: {
       ? args.projectBankId.trim()
       : undefined;
   if (!wantsUser && !sharedCodingBankId) return undefined;
-  const globalBankId = args.globalBankId?.trim() || args.config.banks.user.bankId;
+  const globalBankId = args.globalBankId?.trim() || userBankEntry(args.config)?.bankId;
   return {
     scope: "global",
     ...(wantsUser ? { enableGlobalBank: true } : {}),
@@ -250,12 +256,12 @@ export async function resolveSetupBankId(args: {
       try {
         if (args.kind === "project") {
           await ensureProjectBank(args.client, trimmed, {
-            ...args.config.banks.project,
+            ...bankMissionSettings(codingBankEntry(args.config)),
             enableObservations: args.config.observations.enabled,
           });
         } else {
           await ensureGlobalBank(args.client, trimmed, {
-            ...args.config.banks.user,
+            ...bankMissionSettings(userBankEntry(args.config)),
             enableObservations: args.config.observations.enabled,
             agentUse: args.config.agentUse,
           });
@@ -604,8 +610,9 @@ async function maybeOfferMentalModelsForSetup(args: {
       ...(entry.target === "project" && projectId ? { projectId } : {}),
       ...(args.config
         ? {
-            bankMissionSettings:
-              entry.target === "user" ? args.config.banks.user : args.config.banks.project,
+            bankMissionSettings: bankMissionSettings(
+              entry.target === "user" ? userBankEntry(args.config) : codingBankEntry(args.config),
+            ),
           }
         : {}),
     });
@@ -856,7 +863,7 @@ export async function runGuidedSetup(args: {
             ? "Isolated project bank ID (optional; leave default for path-derived)"
             : "Coding bank ID (recommended shared bank; saved globally for new repos)",
         fallback:
-          config.banks.project.bankId ??
+          codingBankEntry(config)?.bankId ??
           (setupProfile === "isolated-only" ? args.deps.getProjectBankId() : "pi-coding"),
         offline,
       })
@@ -873,7 +880,7 @@ export async function runGuidedSetup(args: {
         config,
         kind: "user",
         title: "User bank ID",
-        fallback: config.banks.user.bankId ?? "",
+        fallback: userBankEntry(config)?.bankId ?? "",
         offline,
       })
     : undefined;

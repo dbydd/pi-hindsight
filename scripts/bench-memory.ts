@@ -291,10 +291,10 @@ async function main() {
       timeoutMs: 90_000,
       ...(base.apiKey ? { apiKey: base.apiKey } : {}),
     },
-    banks: {
-      ...DEFAULT_CONFIG.banks,
-      project: { ...DEFAULT_CONFIG.banks.project, bankId, derive: "manual" },
-    },
+    banks: [
+      { id: "coding", alias: "project", enabled: true, bankId, derive: "manual" },
+      { id: "life", alias: "user", enabled: false },
+    ],
     recall: { ...DEFAULT_CONFIG.recall, budget: "low" },
   };
 

@@ -1,4 +1,10 @@
 import type { ExtensionCommandContext } from "@earendil-works/pi-coding-agent";
+import {
+  bankEntryEnabled,
+  bankMissionSettings,
+  codingBankEntry,
+  userBankEntry,
+} from "../config/banks.js";
 import { redactError } from "../utils/sanitize.js";
 import type { FieldId } from "../config/config-editing-model.js";
 import {
@@ -136,11 +142,15 @@ async function handleImportSessions(
   deps: MemoryOperationsDeps,
 ): Promise<void> {
   const config = deps.getConfig();
-  const setupProfile = config.banks.project.enabled
-    ? config.banks.user.enabled
+  const coding = codingBankEntry(config);
+  const user = userBankEntry(config);
+  const codingEnabled = Boolean(coding && bankEntryEnabled(coding));
+  const userEnabled = Boolean(user && bankEntryEnabled(user));
+  const setupProfile = codingEnabled
+    ? userEnabled
       ? "project-user"
       : "project-only"
-    : config.banks.user.enabled
+    : userEnabled
       ? "user-only"
       : "recall-only";
   await maybeOfferHistoricalImportForSetup({
@@ -149,7 +159,7 @@ async function handleImportSessions(
     setupProfile,
     cwd: ctx.cwd,
     projectBankId: deps.getProjectBankId(),
-    ...(config.banks.user.bankId ? { globalBankId: config.banks.user.bankId } : {}),
+    ...(user?.bankId ? { globalBankId: user.bankId } : {}),
   });
 }
 

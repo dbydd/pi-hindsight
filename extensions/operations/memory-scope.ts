@@ -1,15 +1,22 @@
-import type { HindsightTagGroup, TagsMatch, ResolvedConfig } from "../types.js";
+import type { BankConfigEntry, HindsightTagGroup, TagsMatch, ResolvedConfig } from "../types.js";
 import { recallScopeTags } from "../banks/banking.js";
 import { createMemoryIdentity } from "./memory-identity.js";
+import { readableBankEntries } from "../config/banks.js";
 
 export interface MemoryRecallScope {
+  /** Stable id of the `banks` entry this scope came from. */
+  entryId: string;
+  /**
+   * Legacy role kind kept for recall/telemetry consumers that branch on it:
+   * project = coding-role scope, global = life/user-role scope.
+   */
   kind: "project" | "global";
   bankId: string;
   tagGroups: HindsightTagGroup[];
 }
 
 export function scopeTagsForBank(cwd: string, config: ResolvedConfig, bankId: string): string[] {
-  return config.banks.user.enabled && bankId === config.banks.user.bankId
+  return config.banks.find((entry) => entry.bankId === bankId)?.alias === "user"
     ? createMemoryIdentity(cwd, config).globalRecallTags
     : recallScopeTags(cwd, config);
 }
@@ -85,21 +92,28 @@ export function selectMemoryScopes(cwd: string, config: ResolvedConfig): MemoryR
   // harness:pi by default so observations match observation-scope tags).
   const includeShared = config.scope.includeSharedObservations === true;
 
-  if (config.banks.project.enabled) {
+  for (const entry of readableBankEntries(config)) {
+    const bankId = resolveEntryBankId(entry, identity.projectBankId);
+    if (!bankId) continue;
+    const isUser = entry.alias === "user";
+    // tag rule: user alias → globalRecallTags; explicit tagGroups win; otherwise project tags.
+    const tags = isUser ? identity.globalRecallTags : identity.projectRecallTags;
+    // Shared observations stay scoped to project-semantics entries, as before.
+    const withShared = includeShared && entry.alias !== "user";
     scopes.push({
-      kind: "project",
-      bankId: identity.projectBankId,
-      tagGroups: scopeTagGroups(identity.projectRecallTags, includeShared),
-    });
-  }
-
-  if (config.banks.user.enabled && config.banks.user.bankId) {
-    scopes.push({
-      kind: "global",
-      bankId: config.banks.user.bankId,
-      tagGroups: scopeTagGroups(identity.globalRecallTags, false),
+      entryId: entry.id,
+      kind: isUser ? "global" : "project",
+      bankId,
+      tagGroups: entry.tagGroups ?? scopeTagGroups(tags, withShared),
     });
   }
 
   return scopes;
+}
+
+/** Resolve the Hindsight bank id for an entry: explicit bankId, or coding-role derivation. */
+function resolveEntryBankId(entry: BankConfigEntry, projectBankId: string): string | undefined {
+  if (entry.bankId) return entry.bankId;
+  // Only coding-semantics entries get a path-derived fallback; others need an explicit bankId.
+  return entry.alias === "user" ? undefined : projectBankId;
 }

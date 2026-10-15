@@ -6,6 +6,7 @@ import {
   projectScopeTag,
   resolveProjectIdentity,
 } from "../banks/banking.js";
+import { codingBankEntry } from "../config/banks.js";
 import type { ResolvedConfig } from "../types.js";
 
 export interface ScopeMigratePlan {
@@ -60,7 +61,7 @@ export function buildScopeMigratePlan(args: {
 }): ScopeMigratePlan {
   const identity = resolveProjectIdentity(args.cwd, args.config);
   const bankId = args.projectBankId ?? deriveProjectBankId(args.cwd, args.config);
-  const pathDerivedBank = !args.config.banks.project.bankId;
+  const pathDerivedBank = !codingBankEntry(args.config)?.bankId;
   const projectTag = projectScopeTag(identity.projectId);
   const legacyRepoTag = legacyRepoScopeTag(identity.legacyRepoKey);
   const identityBasisWeak = identity.basis === "basename";

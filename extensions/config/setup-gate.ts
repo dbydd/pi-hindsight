@@ -1,6 +1,7 @@
 import { existsSync } from "node:fs";
 import { join } from "node:path";
 import type { ResolvedConfig } from "../types.js";
+import { bankEntryEnabled, codingBankEntry, userBankEntry } from "./banks.js";
 
 /**
  * Whether automatic Hindsight network memory (ensure bank, auto-recall, auto-retain)
@@ -13,7 +14,7 @@ import type { ResolvedConfig } from "../types.js";
  */
 export function isMemorySetupComplete(config: ResolvedConfig, cwd: string): boolean {
   if (!hasSetupSignals(config, cwd)) return false;
-  if (requiresExplicitCodingBankId(config) && !config.banks.project.bankId?.trim()) {
+  if (requiresExplicitCodingBankId(config) && !codingBankEntry(config)?.bankId?.trim()) {
     return false;
   }
   return true;
@@ -22,9 +23,8 @@ export function isMemorySetupComplete(config: ResolvedConfig, cwd: string): bool
 /** Soft signals that this install is not a pure first-run blank slate. */
 function hasSetupSignals(config: ResolvedConfig, cwd: string): boolean {
   if (config.setupComplete === true) return true;
-  if (config.banks.project.bankId?.trim()) return true;
-  if (config.banks.user.bankId?.trim()) return true;
-  if (config.banks.global.bankId?.trim()) return true;
+  if (codingBankEntry(config)?.bankId?.trim()) return true;
+  if (userBankEntry(config)?.bankId?.trim()) return true;
   if (hasProjectConfigFile(cwd)) return true;
   if (hasLocalRuntimeState(cwd, config)) return true;
   return false;
@@ -35,7 +35,8 @@ function hasSetupSignals(config: ResolvedConfig, cwd: string): boolean {
  * isolated-bank (hard wall) may keep path-derived identity.
  */
 export function requiresExplicitCodingBankId(config: ResolvedConfig): boolean {
-  return config.scope.mode === "domain-tagged" && config.banks.project.enabled;
+  const coding = codingBankEntry(config);
+  return config.scope.mode === "domain-tagged" && Boolean(coding && bankEntryEnabled(coding));
 }
 
 const DOCS_BASE_URL = "https://luxus.github.io/pi-hindsight";

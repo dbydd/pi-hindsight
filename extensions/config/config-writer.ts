@@ -7,6 +7,7 @@ import { applyEdits, modify } from "jsonc-parser";
 import { validEnvVarName } from "./config.js";
 import { resetPathsForConfigKeys, type ConfigResetKey } from "./config-field-paths.js";
 import { parseJsonWithComments } from "./config.js";
+import { deleteAtBankPath, valueAtBankPath } from "./banks.js";
 
 export type MemoryProfile = "project-only" | "project+global" | "global-only" | "recall-only";
 
@@ -21,19 +22,42 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
-function mergeBankPatch(
+const CODING_BANK_ID = "coding";
+const USER_BANK_ID = "life";
+
+/**
+ * Write bank settings into the `banks` array form, matching on the stable entry id.
+ * Writers never emit the legacy three-slot object shape.
+ */
+function mergeBankEntryPatch(
   patch: Record<string, unknown>,
-  bank: "project" | "user",
+  entryId: string,
   values: Record<string, unknown>,
+  alias?: "project" | "user",
 ): void {
-  const banksPatch = isRecord(patch.banks) ? patch.banks : {};
-  patch.banks = {
-    ...banksPatch,
-    [bank]: {
-      ...(isRecord(banksPatch[bank]) ? banksPatch[bank] : {}),
-      ...values,
-    },
-  };
+  const entries = Array.isArray(patch.banks) ? [...(patch.banks as Record<string, unknown>[])] : [];
+  const index = entries.findIndex((entry) => isRecord(entry) && entry.id === entryId);
+  const base = index >= 0 && isRecord(entries[index]) ? entries[index]! : {};
+  const next: Record<string, unknown> = { ...base, id: entryId, ...values };
+  if (alias && next.alias === undefined) next.alias = alias;
+  if (index >= 0) entries[index] = next;
+  else entries.push(next);
+  patch.banks = entries;
+}
+
+/** Merge a nested bank sub-object (mission/recall/retain) one level deep. */
+function mergeBankNestedPatch(
+  patch: Record<string, unknown>,
+  entryId: string,
+  key: "mission" | "recall" | "retain",
+  values: Record<string, unknown>,
+  alias?: "project" | "user",
+): void {
+  const entries = Array.isArray(patch.banks) ? [...(patch.banks as Record<string, unknown>[])] : [];
+  const existing = entries.find((entry) => isRecord(entry) && entry.id === entryId);
+  const current =
+    existing && isRecord(existing[key]) ? (existing[key] as Record<string, unknown>) : {};
+  mergeBankEntryPatch(patch, entryId, { [key]: { ...current, ...values } }, alias);
 }
 
 export function projectConfigPath(cwd: string): string {
@@ -196,23 +220,20 @@ export function buildProjectConfigPatch(input: ProjectConfigPatchInput): Record<
     const globalBankId = input.globalBankId?.trim();
     const userBankPatch = { enabled: true, ...(globalBankId ? { bankId: globalBankId } : {}) };
     if (input.memoryProfile === "project-only") {
-      patch.banks = { project: { enabled: true }, user: { enabled: false } };
+      mergeBankEntryPatch(patch, CODING_BANK_ID, { enabled: true }, "project");
+      mergeBankEntryPatch(patch, USER_BANK_ID, { enabled: false }, "user");
       patch.userRetain = { mode: "explicit-only" };
       patch.recall = { enabled: true };
       patch.retain = { enabled: true };
     } else if (input.memoryProfile === "project+global") {
-      patch.banks = {
-        project: { enabled: true },
-        user: userBankPatch,
-      };
+      mergeBankEntryPatch(patch, CODING_BANK_ID, { enabled: true }, "project");
+      mergeBankEntryPatch(patch, USER_BANK_ID, userBankPatch, "user");
       patch.userRetain = { mode: "explicit-only" };
       patch.recall = { enabled: true };
       patch.retain = { enabled: true };
     } else if (input.memoryProfile === "global-only") {
-      patch.banks = {
-        project: { enabled: false },
-        user: userBankPatch,
-      };
+      mergeBankEntryPatch(patch, CODING_BANK_ID, { enabled: false }, "project");
+      mergeBankEntryPatch(patch, USER_BANK_ID, userBankPatch, "user");
       patch.userRetain = { mode: "explicit-only" };
       patch.recall = { enabled: true };
       patch.retain = { enabled: true };
@@ -222,37 +243,77 @@ export function buildProjectConfigPatch(input: ProjectConfigPatchInput): Record<
     }
   }
   if (input.projectBankId && input.memoryProfile !== "global-only") {
-    patch.banks = {
-      ...(isRecord(patch.banks) ? patch.banks : {}),
-      project: { enabled: true, derive: "manual", bankId: input.projectBankId },
-    };
+    mergeBankEntryPatch(
+      patch,
+      CODING_BANK_ID,
+      { enabled: true, derive: "manual", bankId: input.projectBankId },
+      "project",
+    );
   }
   if (input.projectRetainMission !== undefined) {
-    mergeBankPatch(patch, "project", { retainMission: input.projectRetainMission });
+    mergeBankNestedPatch(
+      patch,
+      CODING_BANK_ID,
+      "mission",
+      { retain: input.projectRetainMission },
+      "project",
+    );
   }
   if (input.projectReflectMission !== undefined) {
-    mergeBankPatch(patch, "project", { reflectMission: input.projectReflectMission });
+    mergeBankNestedPatch(
+      patch,
+      CODING_BANK_ID,
+      "mission",
+      { reflect: input.projectReflectMission },
+      "project",
+    );
   }
   if (input.projectObservationsMission !== undefined) {
-    mergeBankPatch(patch, "project", { observationsMission: input.projectObservationsMission });
+    mergeBankNestedPatch(
+      patch,
+      CODING_BANK_ID,
+      "mission",
+      { observations: input.projectObservationsMission },
+      "project",
+    );
   }
   if (!input.memoryProfile && (input.globalBankId || input.enableGlobalBank !== undefined)) {
-    patch.banks = {
-      ...(isRecord(patch.banks) ? patch.banks : {}),
-      user: {
+    mergeBankEntryPatch(
+      patch,
+      USER_BANK_ID,
+      {
         ...(input.enableGlobalBank !== undefined ? { enabled: input.enableGlobalBank } : {}),
         ...(input.globalBankId ? { bankId: input.globalBankId, enabled: true } : {}),
       },
-    };
+      "user",
+    );
   }
   if (input.globalRetainMission !== undefined) {
-    mergeBankPatch(patch, "user", { retainMission: input.globalRetainMission });
+    mergeBankNestedPatch(
+      patch,
+      USER_BANK_ID,
+      "mission",
+      { retain: input.globalRetainMission },
+      "user",
+    );
   }
   if (input.globalReflectMission !== undefined) {
-    mergeBankPatch(patch, "user", { reflectMission: input.globalReflectMission });
+    mergeBankNestedPatch(
+      patch,
+      USER_BANK_ID,
+      "mission",
+      { reflect: input.globalReflectMission },
+      "user",
+    );
   }
   if (input.globalObservationsMission !== undefined) {
-    mergeBankPatch(patch, "user", { observationsMission: input.globalObservationsMission });
+    mergeBankNestedPatch(
+      patch,
+      USER_BANK_ID,
+      "mission",
+      { observations: input.globalObservationsMission },
+      "user",
+    );
   }
   if (input.globalRetainMode) {
     patch.userRetain = { mode: input.globalRetainMode };
@@ -352,14 +413,8 @@ export function buildProjectConfigPatch(input: ProjectConfigPatchInput): Record<
 }
 
 function deletePath(config: Record<string, unknown>, path: string[]): void {
-  const [head, ...rest] = path;
-  if (!head) return;
-  if (rest.length === 0) {
-    delete config[head];
-    return;
-  }
-  const child = config[head];
-  if (isRecord(child)) deletePath(child, rest);
+  // `banks` is an array: resolve the first path segment by entry id or alias.
+  deleteAtBankPath(config, path);
 }
 
 async function writeConfig(
@@ -380,12 +435,8 @@ async function writeConfig(
 }
 
 function getPathValue(value: unknown, path: string[]): unknown {
-  let current = value;
-  for (const part of path) {
-    if (!isRecord(current)) return undefined;
-    current = current[part];
-  }
-  return current;
+  // `banks` is an array: resolve the first path segment by entry id or alias.
+  return valueAtBankPath(value, path);
 }
 
 function flattenPatchForJsonc(
@@ -393,6 +444,8 @@ function flattenPatchForJsonc(
   base: Record<string, unknown>,
   prefix: string[] = [],
 ): Array<{ path: string[]; value: unknown }> {
+  // `banks` array entries are replaced whole: JSONC cannot address them by id.
+  if (prefix[0] === "banks") return [{ path: prefix, value }];
   if (!isRecord(value)) return [{ path: prefix, value }];
   if (prefix.length > 0 && !isRecord(getPathValue(base, prefix))) {
     return [{ path: prefix, value }];

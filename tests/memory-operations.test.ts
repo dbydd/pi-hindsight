@@ -6,6 +6,7 @@ import { defaultProjectBankMissions } from "../extensions/banks/bank-operations.
 import { DEFAULT_CONFIG } from "../extensions/config/config.js";
 import { createMemoryOperations } from "../extensions/operations/memory-operation-service.js";
 import type { HindsightLikeClient } from "../extensions/types.js";
+import { banks } from "./helpers/bank-config.js";
 
 function client(): HindsightLikeClient {
   return {
@@ -29,20 +30,24 @@ describe("memory operations", () => {
       string,
       any
     >;
-    expect(written.banks).toMatchObject({
-      project: { enabled: false },
-      user: { enabled: true, bankId: "shared" },
-    });
+    expect(written.banks).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ id: "coding", alias: "project", enabled: false }),
+        expect.objectContaining({ id: "life", alias: "user", enabled: true, bankId: "shared" }),
+      ]),
+    );
 
     await operations.configure(cwd, { timeoutMs: 1234 });
     written = JSON.parse(readFileSync(join(cwd, ".pi", "hindsight.json"), "utf8")) as Record<
       string,
       any
     >;
-    expect(written.banks).toMatchObject({
-      project: { enabled: false },
-      user: { enabled: true, bankId: "shared" },
-    });
+    expect(written.banks).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ id: "coding", alias: "project", enabled: false }),
+        expect.objectContaining({ id: "life", alias: "user", enabled: true, bankId: "shared" }),
+      ]),
+    );
     expect(written.hindsight).toMatchObject({ timeoutMs: 1234 });
 
     await operations.configure(cwd, { memoryProfile: "project-only", globalBankId: "shared" });
@@ -50,10 +55,12 @@ describe("memory operations", () => {
       string,
       any
     >;
-    expect(written.banks).toMatchObject({
-      project: { enabled: true },
-      user: { enabled: false },
-    });
+    expect(written.banks).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ id: "coding", alias: "project", enabled: true }),
+        expect.objectContaining({ id: "life", alias: "user", enabled: false }),
+      ]),
+    );
   });
 
   it("configures global scope without writing project config", async () => {
@@ -229,7 +236,7 @@ describe("memory operations", () => {
     const calls: Array<{ method: string; bank: string }> = [];
     const config = {
       ...DEFAULT_CONFIG,
-      banks: { ...DEFAULT_CONFIG.banks, user: { enabled: true, bankId: "global-luxus" } },
+      banks: banks({ user: { enabled: true, bankId: "global-luxus" } }),
       retain: { ...DEFAULT_CONFIG.retain, async: false },
     };
     const operations = createMemoryOperations({
@@ -358,7 +365,7 @@ describe("memory operations", () => {
     }));
     const config = {
       ...DEFAULT_CONFIG,
-      banks: { ...DEFAULT_CONFIG.banks, user: { enabled: true, bankId: "global-luxus" } },
+      banks: banks({ user: { enabled: true, bankId: "global-luxus" } }),
     };
     const operations = createMemoryOperations({
       getClient: () => ({ ...client(), importBankTemplate }),
@@ -384,10 +391,7 @@ describe("memory operations", () => {
     }));
     const config = {
       ...DEFAULT_CONFIG,
-      banks: {
-        ...DEFAULT_CONFIG.banks,
-        project: { ...DEFAULT_CONFIG.banks.project, retainMission: "Custom retain mission" },
-      },
+      banks: banks({ project: { retainMission: "Custom retain mission" } }),
     };
     const operations = createMemoryOperations({
       getClient: () => ({ ...client(), importBankTemplate }),
@@ -411,10 +415,9 @@ describe("memory operations", () => {
     }));
     const config = {
       ...DEFAULT_CONFIG,
-      banks: {
-        ...DEFAULT_CONFIG.banks,
+      banks: banks({
         user: { enabled: true, bankId: "global-luxus", reflectMission: "Custom reflect mission" },
-      },
+      }),
     };
     const operations = createMemoryOperations({
       getClient: () => ({ ...client(), importBankTemplate }),

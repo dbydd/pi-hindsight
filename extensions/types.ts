@@ -65,6 +65,54 @@ export interface BankMissionSettings {
   retainStructuredChunkSize?: number;
 }
 
+/** Read/write capability of a bank array entry. Unset means `read-write`. */
+export type BankAccess = "read" | "write" | "read-write";
+/** Reserved role alias; `derive` and shared-observation semantics follow `project`. */
+export type BankAlias = "project" | "user";
+/** How a per-bank automatic retain decision is made. */
+export type BankRetainMode = "always" | "decision" | "explicit-only";
+export type BankDerive = "repo" | "cwd" | "manual" | "basename";
+
+export interface BankEntryMission {
+  retain?: string;
+  reflect?: string;
+  observations?: string;
+  retainStructuredChunkSize?: number;
+}
+
+export interface BankEntryRecallSettings {
+  enabled?: boolean;
+  maxTokens?: number;
+  preamble?: string;
+}
+
+export interface BankEntryRetainSettings {
+  enabled?: boolean;
+  mode?: BankRetainMode;
+}
+
+/**
+ * One entry of the `banks` array. `id` is the stable key used for merging layers,
+ * decision-model output, and tool parameters; `alias` keeps the legacy project/user roles.
+ */
+export interface BankConfigEntry {
+  id: string;
+  alias?: BankAlias;
+  /** Explicit Hindsight bank id. Entries without an alias need one to resolve. */
+  bankId?: string;
+  /** Defaults to true when unset. */
+  enabled?: boolean;
+  access?: BankAccess;
+  /** Shown to the decision model when it picks banks. */
+  description?: string;
+  /** Only meaningful for `alias: "project"`. */
+  derive?: BankDerive;
+  mission?: BankEntryMission;
+  recall?: BankEntryRecallSettings;
+  retain?: BankEntryRetainSettings;
+  tagGroups?: HindsightTagGroup[];
+}
+
 export interface HindsightEntityInput {
   text: string;
   type?: string;
@@ -119,21 +167,10 @@ export interface ResolvedConfig {
     /** Cache TTL for listMentalModels content used in automatic inject. */
     cacheTtlMs: number;
   };
-  banks: {
-    project: BankMissionSettings & {
-      enabled: boolean;
-      bankId?: string;
-      /**
-       * How to pick a bank id when banks.project.bankId is unset.
-       * - repo/cwd: hashed `pi-project-<slug>-<pathHash>` (upstream default)
-       * - basename: git-root folder name, Claude/Grok compatible (`my_websites`)
-       * - manual: bankId is required; leftover hashed fallback if missing
-       */
-      derive: "repo" | "cwd" | "manual" | "basename";
-    };
-    user: BankMissionSettings & { enabled: boolean; bankId?: string };
-    global: BankMissionSettings & { enabled: boolean; bankId?: string };
-  };
+  /** Ordered bank list. Merged across config layers by `id`. */
+  banks: BankConfigEntry[];
+  /** Bank ids used when the decision model fails or returns unusable output. */
+  banksFallback: string[];
   recall: {
     enabled: boolean;
     budget: Budget;

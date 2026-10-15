@@ -3,6 +3,7 @@ import { mkdtempSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { DEFAULT_CONFIG } from "../extensions/config/config.js";
+import { banks } from "./helpers/bank-config.js";
 import {
   createControlOperations,
   projectMentalModelListMetadata,
@@ -44,10 +45,7 @@ describe("memory control operations", () => {
       getConfig: () => ({
         ...DEFAULT_CONFIG,
         setupComplete: true,
-        banks: {
-          ...DEFAULT_CONFIG.banks,
-          project: { enabled: true, bankId: "coding", derive: "manual" as const },
-        },
+        banks: banks({ project: { enabled: true, bankId: "coding", derive: "manual" } }),
       }),
       getProjectBankId: () => "coding",
     });
@@ -97,10 +95,7 @@ describe("memory control operations", () => {
       getConfig: () => ({
         ...DEFAULT_CONFIG,
         setupComplete: true,
-        banks: {
-          ...DEFAULT_CONFIG.banks,
-          project: { enabled: true, bankId: "coding", derive: "manual" as const },
-        },
+        banks: banks({ project: { enabled: true, bankId: "coding", derive: "manual" } }),
       }),
       getProjectBankId: () => "coding",
     });
@@ -148,10 +143,7 @@ describe("memory control operations", () => {
       getConfig: () => ({
         ...DEFAULT_CONFIG,
         setupComplete: true,
-        banks: {
-          ...DEFAULT_CONFIG.banks,
-          project: { enabled: true, bankId: "coding", derive: "manual" as const },
-        },
+        banks: banks({ project: { enabled: true, bankId: "coding", derive: "manual" } }),
       }),
       getProjectBankId: () => "coding",
     });
@@ -239,10 +231,7 @@ describe("memory control operations", () => {
           apiKey: "sk-secret",
           apiKeyRef: "env:HINDSIGHT_API_KEY",
         },
-        banks: {
-          ...DEFAULT_CONFIG.banks,
-          project: { enabled: true, bankId: "kai-coding", derive: "manual" as const },
-        },
+        banks: banks({ project: { enabled: true, bankId: "kai-coding", derive: "manual" } }),
       }),
       getProjectBankId: () => "kai-coding",
     });
@@ -316,10 +305,12 @@ describe("memory control operations", () => {
     expect(reloads).toBe(1);
     const disk = JSON.parse(readFileSync(join(cwd, ".pi", "hindsight.json"), "utf8")) as {
       setupComplete?: boolean;
-      banks?: { project?: { bankId?: string } };
+      banks?: unknown;
     };
     expect(disk.setupComplete).toBe(true);
-    expect(disk.banks?.project?.bankId).toBe("kai-coding");
+    expect(disk.banks).toEqual(
+      expect.arrayContaining([expect.objectContaining({ id: "coding", bankId: "kai-coding" })]),
+    );
   });
 
   it("config get/patch allowlists userScopeTags including empty arrays", async () => {
@@ -406,10 +397,7 @@ describe("memory control operations", () => {
       getConfig: () => ({
         ...DEFAULT_CONFIG,
         setupComplete: true,
-        banks: {
-          ...DEFAULT_CONFIG.banks,
-          project: { enabled: true, bankId: "coding", derive: "manual" as const },
-        },
+        banks: banks({ project: { enabled: true, bankId: "coding", derive: "manual" } }),
       }),
       getProjectBankId: () => "coding",
     });
@@ -462,10 +450,7 @@ describe("memory control operations", () => {
       getConfig: () => ({
         ...DEFAULT_CONFIG,
         setupComplete: true,
-        banks: {
-          ...DEFAULT_CONFIG.banks,
-          project: { enabled: true, bankId: "coding", derive: "manual" as const },
-        },
+        banks: banks({ project: { enabled: true, bankId: "coding", derive: "manual" } }),
       }),
       getProjectBankId: () => "coding",
     });
@@ -490,10 +475,7 @@ describe("memory control operations", () => {
       getConfig: () => ({
         ...DEFAULT_CONFIG,
         setupComplete: true,
-        banks: {
-          ...DEFAULT_CONFIG.banks,
-          project: { enabled: true, bankId: "coding", derive: "manual" as const },
-        },
+        banks: banks({ project: { enabled: true, bankId: "coding", derive: "manual" } }),
       }),
       getProjectBankId: () => "coding",
     });
@@ -526,10 +508,7 @@ describe("memory control operations", () => {
       getConfig: () => ({
         ...DEFAULT_CONFIG,
         setupComplete: true,
-        banks: {
-          ...DEFAULT_CONFIG.banks,
-          project: { enabled: true, bankId: "coding", derive: "manual" as const },
-        },
+        banks: banks({ project: { enabled: true, bankId: "coding", derive: "manual" } }),
       }),
       getProjectBankId: () => "coding",
     });
@@ -552,10 +531,7 @@ describe("memory control operations", () => {
       getConfig: () => ({
         ...DEFAULT_CONFIG,
         setupComplete: true,
-        banks: {
-          ...DEFAULT_CONFIG.banks,
-          project: { enabled: true, bankId: "coding", derive: "manual" as const },
-        },
+        banks: banks({ project: { enabled: true, bankId: "coding", derive: "manual" } }),
       }),
       getProjectBankId: () => "coding",
     });
@@ -600,10 +576,7 @@ describe("memory control operations", () => {
       getConfig: () => ({
         ...DEFAULT_CONFIG,
         setupComplete: true,
-        banks: {
-          ...DEFAULT_CONFIG.banks,
-          project: { enabled: true, bankId: "coding", derive: "manual" as const },
-        },
+        banks: banks({ project: { enabled: true, bankId: "coding", derive: "manual" } }),
       }),
       getProjectBankId: () => "coding",
     });
@@ -645,10 +618,7 @@ describe("memory control operations", () => {
       getConfig: () => ({
         ...DEFAULT_CONFIG,
         setupComplete: true,
-        banks: {
-          ...DEFAULT_CONFIG.banks,
-          project: { enabled: true, bankId: "coding", derive: "manual" as const },
-        },
+        banks: banks({ project: { enabled: true, bankId: "coding", derive: "manual" } }),
       }),
       getProjectBankId: () => "coding",
     });
@@ -687,10 +657,7 @@ describe("memory control operations", () => {
       getConfig: () => ({
         ...DEFAULT_CONFIG,
         setupComplete: true,
-        banks: {
-          ...DEFAULT_CONFIG.banks,
-          project: { enabled: true, bankId: "coding", derive: "manual" as const },
-        },
+        banks: banks({ project: { enabled: true, bankId: "coding", derive: "manual" } }),
       }),
       getProjectBankId: () => "coding",
     });

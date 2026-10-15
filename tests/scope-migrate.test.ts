@@ -3,22 +3,19 @@ import { mkdtempSync, mkdirSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { DEFAULT_CONFIG } from "../extensions/config/config.js";
+import { banks, type BanksPatch } from "./helpers/bank-config.js";
 import {
   buildScopeMigratePlan,
   writeScopeMigrateReceipt,
 } from "../extensions/operations/scope-migrate.js";
 import type { ResolvedConfig } from "../extensions/types.js";
 
-function cfg(patch: Partial<ResolvedConfig> = {}): ResolvedConfig {
+function cfg(patch: BanksPatch = {}): ResolvedConfig {
   return {
     ...DEFAULT_CONFIG,
     ...patch,
     scope: { ...DEFAULT_CONFIG.scope, ...(patch.scope ?? {}) },
-    banks: {
-      ...DEFAULT_CONFIG.banks,
-      ...(patch.banks ?? {}),
-      project: { ...DEFAULT_CONFIG.banks.project, ...(patch.banks?.project ?? {}) },
-    },
+    banks: banks(patch.banks),
   };
 }
 
@@ -52,10 +49,7 @@ describe("scope migrate dry-run", () => {
       cwd,
       config: cfg({
         scope: { ...DEFAULT_CONFIG.scope, projectId: "finalform", projectIdStrategy: "remote" },
-        banks: {
-          ...DEFAULT_CONFIG.banks,
-          project: { enabled: true, bankId: "kai-coding", derive: "manual" },
-        },
+        banks: banks({ project: { enabled: true, bankId: "kai-coding", derive: "manual" } }),
       }),
       projectBankId: "kai-coding",
     });
@@ -72,10 +66,7 @@ describe("scope migrate dry-run", () => {
     const base = buildScopeMigratePlan({
       cwd,
       config: cfg({
-        banks: {
-          ...DEFAULT_CONFIG.banks,
-          project: { enabled: true, bankId: "kai-coding", derive: "manual" },
-        },
+        banks: banks({ project: { enabled: true, bankId: "kai-coding", derive: "manual" } }),
       }),
       projectBankId: "kai-coding",
     });
@@ -83,10 +74,7 @@ describe("scope migrate dry-run", () => {
     const plan = buildScopeMigratePlan({
       cwd,
       config: cfg({
-        banks: {
-          ...DEFAULT_CONFIG.banks,
-          project: { enabled: true, bankId: "kai-coding", derive: "manual" },
-        },
+        banks: banks({ project: { enabled: true, bankId: "kai-coding", derive: "manual" } }),
       }),
       projectBankId: "kai-coding",
       bankTags: [

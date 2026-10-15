@@ -7,11 +7,11 @@ Pi Hindsight’s default bank topology changed under ADR-005: most repos share a
 
 ## What changed
 
-| Before (path banks)                         | After (domain banks)                                                          |
-| ------------------------------------------- | ----------------------------------------------------------------------------- |
-| Bank id derived from absolute path          | Explicit coding bank id for shared domain mode                                |
-| Isolation mostly by separate banks          | Isolation by `project:<id>` tags (plus dual-tag legacy `repo:`)               |
-| Auto memory could run on path-derived banks | **Domain-tagged** auto memory needs `banks.project.bankId` before network I/O |
+| Before (path banks)                         | After (domain banks)                                                                    |
+| ------------------------------------------- | --------------------------------------------------------------------------------------- |
+| Bank id derived from absolute path          | Explicit coding bank id for shared domain mode                                          |
+| Isolation mostly by separate banks          | Isolation by `project:<id>` tags (plus dual-tag legacy `repo:`)                         |
+| Auto memory could run on path-derived banks | **Domain-tagged** auto memory needs an explicit coding bank `bankId` before network I/O |
 
 You do **not** need a bulk tag rewrite to keep working. Soft update is dual-tag + choose a bank model.
 
@@ -30,7 +30,7 @@ Recall matches **either** tag, so older memories still surface while new ones ge
 
 Practical steps:
 
-1. Open `/hindsight` → guided setup (`g`) **or** set `banks.project.bankId` / `PI_HINDSIGHT_PROJECT_BANK_ID`.
+1. Open `/hindsight` → guided setup (`g`) **or** set the coding entry's `bankId` in `banks` / `PI_HINDSIGHT_PROJECT_BANK_ID`.
 2. Prefer `scope.projectIdStrategy: "remote"` (default) or pin `scope.projectId` for weak basename-only repos.
 3. Optional: ask the agent to run `hindsight_scope_migrate` (dry-run only) for a local plan/receipt. It never rewrites Hindsight tags.
 
@@ -50,11 +50,11 @@ Dual-tag stays on until coverage is good enough; drop it only after project-tagg
 ```jsonc
 {
   "scope": { "mode": "isolated-bank" },
-  "banks": { "project": { "enabled": true } },
+  "banks": [{ "id": "coding", "alias": "project", "enabled": true }],
 }
 ```
 
-Path-derived bank ids remain valid. Pin `banks.project.bankId` if you want a fixed hard-wall bank. Dual-tag still helps after path moves.
+Path-derived bank ids remain valid. Pin the coding entry's `bankId` if you want a fixed hard-wall bank. Dual-tag still helps after path moves.
 
 ### 4. Freeze on a previous package version
 
@@ -64,7 +64,7 @@ If you must not change topology yet, pin the previous published release of `@lux
 
 Automatic bank ensure, recall, and retain stay off until setup is satisfied:
 
-- **Domain-tagged** + project bank enabled → requires explicit `banks.project.bankId` (or env). Soft signals alone (empty project config, queue files, `setupComplete` without bank id) do **not** unlock auto memory.
+- **Domain-tagged** + coding bank enabled → requires an explicit coding `bankId` (or env). Soft signals alone (empty project config, queue files, `setupComplete` without bank id) do **not** unlock auto memory.
 - **Isolated-bank** → may use path-derived banks once config/runtime signals show an existing install, or after guided setup.
 
 Status shows **Setup: required** and startup can warn with this guide’s URL when notifications are on.

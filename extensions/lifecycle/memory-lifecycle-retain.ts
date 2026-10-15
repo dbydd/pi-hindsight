@@ -15,6 +15,7 @@ import {
   readSessionMemoryMeta,
 } from "../utils/session-memory-meta.js";
 import { redactError } from "../utils/sanitize.js";
+import { bankEntryEnabled, canWriteBank, codingBankEntry, userBankEntry } from "../config/banks.js";
 import type { HindsightLikeClient, ResolvedConfig } from "../types.js";
 import type { RuntimeSnapshot } from "./memory-lifecycle-runtime.js";
 import type { HindsightActivity } from "../utils/status.js";
@@ -88,14 +89,24 @@ export function createRetainTurnPolicy(deps: RetainTurnPolicyDeps): RetainTurnPo
 
   const retainTargets = (): string[] => {
     const config = deps.getConfig();
-    return config.banks.project.enabled ? [deps.getProjectBankId()] : [];
+    const coding = codingBankEntry(config);
+    return coding && bankEntryEnabled(coding) && canWriteBank(coding)
+      ? [deps.getProjectBankId()]
+      : [];
   };
 
   return {
     async retain(event: AgentEndEvent, runtime: RuntimeSnapshot): Promise<RetainTurnResult> {
       const config = deps.getConfig();
-      const canRetainProject = config.banks.project.enabled;
-      const canRetainGlobal = config.banks.user.enabled && Boolean(config.banks.user.bankId);
+      const canRetainProject = Boolean(
+        codingBankEntry(config) &&
+        bankEntryEnabled(codingBankEntry(config)!) &&
+        canWriteBank(codingBankEntry(config)!),
+      );
+      const user = userBankEntry(config);
+      const canRetainGlobal = Boolean(
+        user && bankEntryEnabled(user) && canWriteBank(user) && user.bankId,
+      );
       if (!config.enabled || !config.retain.enabled || (!canRetainProject && !canRetainGlobal))
         return { queued: false, sent: 0, remaining: 0 };
 

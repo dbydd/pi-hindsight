@@ -5,13 +5,14 @@ import { join } from "node:path";
 import { DEFAULT_CONFIG } from "../extensions/config/config.js";
 import { buildStatusFields, formatStatusFieldsText } from "../extensions/utils/status-fields.js";
 import type { ResolvedConfig } from "../extensions/types.js";
+import { banks, type BanksPatch } from "./helpers/bank-config.js";
 
-function config(patch: Partial<ResolvedConfig> = {}): ResolvedConfig {
+function config(patch: BanksPatch = {}): ResolvedConfig {
   return {
     ...DEFAULT_CONFIG,
     ...patch,
     scope: { ...DEFAULT_CONFIG.scope, ...(patch as { scope?: object }).scope },
-    banks: { ...DEFAULT_CONFIG.banks, ...(patch.banks ?? {}) },
+    banks: banks(patch.banks),
     recall: { ...DEFAULT_CONFIG.recall, ...(patch.recall ?? {}) },
     retain: { ...DEFAULT_CONFIG.retain, ...(patch.retain ?? {}) },
   } as ResolvedConfig;
@@ -36,10 +37,7 @@ describe("status fields tones", () => {
     const fields = buildStatusFields(
       config({
         setupComplete: true,
-        banks: {
-          ...DEFAULT_CONFIG.banks,
-          project: { enabled: true, bankId: "kai-coding", derive: "manual" },
-        },
+        banks: banks({ project: { enabled: true, bankId: "kai-coding", derive: "manual" } }),
         recall: { ...DEFAULT_CONFIG.recall, maxTokens: 1200 },
       }),
       { cwd, projectBankId: "kai-coding" },
@@ -56,10 +54,7 @@ describe("status fields tones", () => {
     const fields = buildStatusFields(
       config({
         setupComplete: true,
-        banks: {
-          ...DEFAULT_CONFIG.banks,
-          project: { enabled: true, bankId: "b", derive: "manual" },
-        },
+        banks: banks({ project: { enabled: true, bankId: "b", derive: "manual" } }),
       }),
       {
         cwd,
@@ -90,10 +85,7 @@ describe("status fields tones", () => {
       config({
         setupComplete: true,
         scope: { ...DEFAULT_CONFIG.scope, includeSharedObservations: true },
-        banks: {
-          ...DEFAULT_CONFIG.banks,
-          project: { enabled: true, bankId: "kai-coding", derive: "manual" },
-        },
+        banks: banks({ project: { enabled: true, bankId: "kai-coding", derive: "manual" } }),
       }),
       { cwd, projectBankId: "kai-coding" },
     );

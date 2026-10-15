@@ -57,14 +57,14 @@ export const CONFIG_FIELD_PATHS: Record<FieldId, string[]> = {
   agentUse: ["agentUse"],
   mentalModelsInject: ["mentalModels", "inject"],
   projectBankId: ["banks", "project", "bankId"],
-  projectRetainMission: ["banks", "project", "retainMission"],
-  projectReflectMission: ["banks", "project", "reflectMission"],
-  projectObservationsMission: ["banks", "project", "observationsMission"],
+  projectRetainMission: ["banks", "project", "mission", "retain"],
+  projectReflectMission: ["banks", "project", "mission", "reflect"],
+  projectObservationsMission: ["banks", "project", "mission", "observations"],
   globalBankEnabled: ["banks", "user", "enabled"],
   globalBankId: ["banks", "user", "bankId"],
-  globalRetainMission: ["banks", "user", "retainMission"],
-  globalReflectMission: ["banks", "user", "reflectMission"],
-  globalObservationsMission: ["banks", "user", "observationsMission"],
+  globalRetainMission: ["banks", "user", "mission", "retain"],
+  globalReflectMission: ["banks", "user", "mission", "reflect"],
+  globalObservationsMission: ["banks", "user", "mission", "observations"],
   globalRetainMode: ["userRetain", "mode"],
   recallEnabled: ["recall", "enabled"],
   recallBudget: ["recall", "budget"],
@@ -106,6 +106,7 @@ export const CONFIG_RESET_PATHS = {
   "banks.profile": [
     ["banks", "project", "enabled"],
     ["banks", "user", "enabled"],
+    // legacy three-slot alias for the same user bank
     ["banks", "global", "enabled"],
     ["userRetain", "mode"],
     ["globalRetain", "mode"],
@@ -120,13 +121,23 @@ export const CONFIG_RESET_PATHS = {
   ],
   "banks.project.missions": [
     ["banks", "project", "mission"],
+    // legacy flat mission fields
     ["banks", "project", "retainMission"],
     ["banks", "project", "reflectMission"],
     ["banks", "project", "observationsMission"],
   ],
-  "banks.project.retainMission": [["banks", "project", "retainMission"]],
-  "banks.project.reflectMission": [["banks", "project", "reflectMission"]],
-  "banks.project.observationsMission": [["banks", "project", "observationsMission"]],
+  "banks.project.retainMission": [
+    ["banks", "project", "mission", "retain"],
+    ["banks", "project", "retainMission"],
+  ],
+  "banks.project.reflectMission": [
+    ["banks", "project", "mission", "reflect"],
+    ["banks", "project", "reflectMission"],
+  ],
+  "banks.project.observationsMission": [
+    ["banks", "project", "mission", "observations"],
+    ["banks", "project", "observationsMission"],
+  ],
   "banks.global.enabled": [
     ["banks", "user", "enabled"],
     ["banks", "global", "enabled"],
@@ -137,6 +148,7 @@ export const CONFIG_RESET_PATHS = {
   ],
   "banks.global.missions": [
     ["banks", "user", "mission"],
+    // legacy flat mission fields
     ["banks", "user", "retainMission"],
     ["banks", "user", "reflectMission"],
     ["banks", "user", "observationsMission"],
@@ -146,14 +158,17 @@ export const CONFIG_RESET_PATHS = {
     ["banks", "global", "observationsMission"],
   ],
   "banks.global.retainMission": [
+    ["banks", "user", "mission", "retain"],
     ["banks", "user", "retainMission"],
     ["banks", "global", "retainMission"],
   ],
   "banks.global.reflectMission": [
+    ["banks", "user", "mission", "reflect"],
     ["banks", "user", "reflectMission"],
     ["banks", "global", "reflectMission"],
   ],
   "banks.global.observationsMission": [
+    ["banks", "user", "mission", "observations"],
     ["banks", "user", "observationsMission"],
     ["banks", "global", "observationsMission"],
   ],

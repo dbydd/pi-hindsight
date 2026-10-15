@@ -6,7 +6,8 @@ import type { MemoryOperationsDeps } from "./memory-operation-types.js";
 import { isMemorySetupComplete, setupRequiredMessage } from "../config/setup-gate.js";
 import { configureMemory, type ProjectConfigPatchInput } from "../config/config-writer.js";
 import { seedKnowledgePages } from "../banks/knowledge-page-seed.js";
-import type { HindsightLikeClient, ResolvedConfig, TagsMatch } from "../types.js";
+import type { BankConfigEntry, HindsightLikeClient, ResolvedConfig, TagsMatch } from "../types.js";
+import { bankEntryEnabled, codingBankEntry, userBankEntry } from "../config/banks.js";
 
 /** Keys agents may read/patch via hindsight_config (no raw secrets). */
 export const AGENT_CONFIG_ALLOWLIST = [
@@ -35,13 +36,21 @@ export type AgentConfigKey = (typeof AGENT_CONFIG_ALLOWLIST)[number];
 
 const ALLOWLIST_SET = new Set<string>(AGENT_CONFIG_ALLOWLIST);
 
+/** Enabled life/user-role bank entry, or undefined when the role is off or missing. */
+function activeUserEntry(config: ResolvedConfig): BankConfigEntry | undefined {
+  const entry = userBankEntry(config);
+  return entry && bankEntryEnabled(entry) ? entry : undefined;
+}
+
 export function agentConfigView(config: ResolvedConfig): Record<AgentConfigKey, unknown> {
+  const coding = codingBankEntry(config);
+  const user = userBankEntry(config);
+  const codingEnabled = Boolean(coding && bankEntryEnabled(coding));
+  const userEnabled = Boolean(user && bankEntryEnabled(user));
   let memoryProfile: string = "project-only";
   if (config.recall.enabled && !config.retain.enabled) memoryProfile = "recall-only";
-  else if (!config.banks.project.enabled && config.banks.user.enabled)
-    memoryProfile = "global-only";
-  else if (config.banks.project.enabled && config.banks.user.enabled)
-    memoryProfile = "project+global";
+  else if (!codingEnabled && userEnabled) memoryProfile = "global-only";
+  else if (codingEnabled && userEnabled) memoryProfile = "project+global";
 
   return {
     setupComplete: config.setupComplete,
@@ -50,9 +59,9 @@ export function agentConfigView(config: ResolvedConfig): Record<AgentConfigKey, 
     projectIdStrategy: config.scope.projectIdStrategy,
     includeSharedObservations: config.scope.includeSharedObservations,
     userScopeTags: config.scope.userScopeTags,
-    projectBankId: config.banks.project.bankId,
-    enableGlobalBank: config.banks.user.enabled,
-    globalBankId: config.banks.user.bankId,
+    projectBankId: coding?.bankId,
+    enableGlobalBank: userEnabled,
+    globalBankId: user?.bankId,
     agentUse: config.agentUse,
     mentalModelsInject: config.mentalModels.inject,
     memoryProfile,
@@ -152,11 +161,11 @@ export function assertAgentConfigPatchSafe(
       ? false
       : patch.memoryProfile
         ? true
-        : current.banks.project.enabled;
+        : Boolean(codingBankEntry(current) && bankEntryEnabled(codingBankEntry(current)!));
   const bankId =
     typeof patch.projectBankId === "string" && patch.projectBankId.trim()
       ? patch.projectBankId.trim()
-      : current.banks.project.bankId?.trim();
+      : codingBankEntry(current)?.bankId?.trim();
   const wantsSetupComplete = patch.setupComplete === true;
   if (wantsSetupComplete && mode === "domain-tagged" && projectEnabled && !bankId) {
     throw new Error(
@@ -276,7 +285,7 @@ export function createControlOperations(deps: MemoryOperationsDeps) {
         projectTag: `project:${project.projectId}`,
         legacyRepoTag: `repo:${project.legacyRepoKey}`,
         codingBankId: deps.getProjectBankId(),
-        lifeBankId: config.banks.user.enabled ? config.banks.user.bankId : undefined,
+        lifeBankId: activeUserEntry(config)?.bankId,
         dualTagWindow: true,
       };
     },
@@ -353,10 +362,11 @@ export function createControlOperations(deps: MemoryOperationsDeps) {
         projectBankId: deps.getProjectBankId(),
       });
       const project = resolveProjectIdentity(args.cwd, config);
+      const userBankId = userBankEntry(config)?.bankId;
       const isUserBank =
         args.bank === "global" ||
         args.bank === "user" ||
-        (config.banks.user.bankId !== undefined && args.bank === config.banks.user.bankId);
+        (userBankId !== undefined && args.bank === userBankId);
 
       switch (args.action) {
         case "list": {
@@ -478,10 +488,11 @@ export function createControlOperations(deps: MemoryOperationsDeps) {
         projectBankId: deps.getProjectBankId(),
       });
       const project = resolveProjectIdentity(args.cwd, config);
+      const userBankId = userBankEntry(config)?.bankId;
       const isUserBank =
         args.bank === "global" ||
         args.bank === "user" ||
-        (config.banks.user.bankId !== undefined && args.bank === config.banks.user.bankId);
+        (userBankId !== undefined && args.bank === userBankId);
 
       switch (args.action) {
         case "tree": {

@@ -50,7 +50,9 @@ function writeSetupCompleteConfig(cwd: string, extra: Record<string, unknown> = 
       setupComplete: true,
       hindsight: { baseUrl: "http://unused.test" },
       // Domain-tagged auto memory requires an explicit coding bank id.
-      banks: { project: { enabled: true, bankId: "test-coding", derive: "manual" } },
+      banks: [
+        { id: "coding", alias: "project", enabled: true, bankId: "test-coding", derive: "manual" },
+      ],
       ...extra,
     }),
   );
@@ -124,7 +126,15 @@ describe("extension hooks", () => {
       JSON.stringify({
         setupComplete: true,
         hindsight: { baseUrl: "http://unused.test" },
-        banks: { project: { enabled: true, bankId: "test-coding", derive: "manual" } },
+        banks: [
+          {
+            id: "coding",
+            alias: "project",
+            enabled: true,
+            bankId: "test-coding",
+            derive: "manual",
+          },
+        ],
       }),
     );
     const { createMemoryLifecycle } = await import("../extensions/lifecycle/memory-lifecycle.js");
@@ -153,7 +163,15 @@ describe("extension hooks", () => {
       JSON.stringify({
         setupComplete: true,
         hindsight: { baseUrl: "http://unused.test" },
-        banks: { project: { enabled: true, bankId: "test-coding", derive: "manual" } },
+        banks: [
+          {
+            id: "coding",
+            alias: "project",
+            enabled: true,
+            bankId: "test-coding",
+            derive: "manual",
+          },
+        ],
       }),
     );
     mocked.ensureProjectBank.mockRejectedValueOnce(new Error("bank ensure exploded"));
@@ -191,7 +209,10 @@ describe("extension hooks", () => {
     mkdirSync(join(cwd, ".pi"));
     writeFileSync(
       join(cwd, ".pi", "hindsight.json"),
-      JSON.stringify({ banks: { global: { enabled: true, bankId: "global-bank" } } }),
+      JSON.stringify({
+        // Legacy three-slot shape: this test asserts the file migration notice.
+        banks: { global: { enabled: true, bankId: "global-bank" } },
+      }),
     );
     const { createMemoryLifecycle } = await import("../extensions/lifecycle/memory-lifecycle.js");
     const ctx = {
@@ -219,7 +240,15 @@ describe("extension hooks", () => {
       JSON.stringify({
         setupComplete: true,
         hindsight: { baseUrl: "http://unused.test" },
-        banks: { project: { enabled: true, bankId: "test-coding", derive: "manual" } },
+        banks: [
+          {
+            id: "coding",
+            alias: "project",
+            enabled: true,
+            bankId: "test-coding",
+            derive: "manual",
+          },
+        ],
       }),
     );
     const { createMemoryLifecycle } = await import("../extensions/lifecycle/memory-lifecycle.js");
@@ -250,7 +279,15 @@ describe("extension hooks", () => {
       JSON.stringify({
         setupComplete: true,
         hindsight: { baseUrl: "http://unused.test" },
-        banks: { project: { enabled: true, bankId: "test-coding", derive: "manual" } },
+        banks: [
+          {
+            id: "coding",
+            alias: "project",
+            enabled: true,
+            bankId: "test-coding",
+            derive: "manual",
+          },
+        ],
       }),
     );
     const sessionFile = join(cwd, "session.jsonl");
@@ -323,7 +360,15 @@ describe("extension hooks", () => {
         JSON.stringify({
           setupComplete: true,
           hindsight: { baseUrl: "http://unused.test" },
-          banks: { project: { enabled: true, bankId: "test-coding", derive: "manual" } },
+          banks: [
+            {
+              id: "coding",
+              alias: "project",
+              enabled: true,
+              bankId: "test-coding",
+              derive: "manual",
+            },
+          ],
           retain: { flushIntervalMs: 1_000, periodicFlushMaxJobs: 1, shutdownFlushMaxJobs: 10 },
         }),
       );
@@ -489,7 +534,9 @@ describe("extension hooks", () => {
     mkdirSync(join(cwd, ".pi"));
     writeFileSync(
       join(cwd, ".pi", "hindsight.json"),
-      JSON.stringify({ banks: { global: { enabled: true, bankId: "global-luxus" } } }),
+      JSON.stringify({
+        banks: [{ id: "user", alias: "user", enabled: true, bankId: "global-luxus" }],
+      }),
     );
     const tools: Record<string, any> = {};
     const pi = {
@@ -560,7 +607,15 @@ describe("extension hooks", () => {
       join(cwd, ".pi", "hindsight.json"),
       JSON.stringify({
         setupComplete: true,
-        banks: { project: { enabled: true, bankId: "test-coding", derive: "manual" } },
+        banks: [
+          {
+            id: "coding",
+            alias: "project",
+            enabled: true,
+            bankId: "test-coding",
+            derive: "manual",
+          },
+        ],
         recall: { storeLastRecall: true },
       }),
     );
@@ -602,7 +657,15 @@ describe("extension hooks", () => {
       join(cwd, ".pi", "hindsight.json"),
       JSON.stringify({
         setupComplete: true,
-        banks: { project: { enabled: true, bankId: "test-coding", derive: "manual" } },
+        banks: [
+          {
+            id: "coding",
+            alias: "project",
+            enabled: true,
+            bankId: "test-coding",
+            derive: "manual",
+          },
+        ],
         recall: { storeLastRecall: true, lastRecallPath: "." },
       }),
     );
@@ -643,11 +706,16 @@ describe("extension hooks", () => {
       join(cwd, ".pi", "hindsight.json"),
       JSON.stringify({
         setupComplete: true,
-        banks: {
-          project: { enabled: true, bankId: "test-coding", derive: "manual" },
-          global: { enabled: false },
-          user: { enabled: false },
-        },
+        banks: [
+          {
+            id: "coding",
+            alias: "project",
+            enabled: true,
+            bankId: "test-coding",
+            derive: "manual",
+          },
+          { id: "life", alias: "user", enabled: false },
+        ],
         recall: { storeLastRecall: true, storeLastRecallFailures: true },
       }),
     );
@@ -692,11 +760,16 @@ describe("extension hooks", () => {
       join(cwd, ".pi", "hindsight.json"),
       JSON.stringify({
         setupComplete: true,
-        banks: {
-          project: { enabled: true, bankId: "test-coding", derive: "manual" },
-          global: { enabled: false },
-          user: { enabled: false },
-        },
+        banks: [
+          {
+            id: "coding",
+            alias: "project",
+            enabled: true,
+            bankId: "test-coding",
+            derive: "manual",
+          },
+          { id: "life", alias: "user", enabled: false },
+        ],
         recall: { storeLastRecall: true },
       }),
     );
@@ -764,7 +837,15 @@ describe("extension hooks", () => {
       join(cwd, ".pi", "hindsight.json"),
       JSON.stringify({
         setupComplete: true,
-        banks: { project: { enabled: true, bankId: "test-coding", derive: "manual" } },
+        banks: [
+          {
+            id: "coding",
+            alias: "project",
+            enabled: true,
+            bankId: "test-coding",
+            derive: "manual",
+          },
+        ],
         recall: { storeLastRecall: true, storeLastRecallFailures: true },
       }),
     );
@@ -881,11 +962,16 @@ describe("extension hooks", () => {
       join(cwd, ".pi", "hindsight.json"),
       JSON.stringify({
         setupComplete: true,
-        banks: {
-          project: { enabled: true, bankId: "test-coding", derive: "manual" },
-          global: { enabled: true, bankId: "global-bank" },
-          user: { enabled: true, bankId: "global-bank" },
-        },
+        banks: [
+          {
+            id: "coding",
+            alias: "project",
+            enabled: true,
+            bankId: "test-coding",
+            derive: "manual",
+          },
+          { id: "user", alias: "user", enabled: true, bankId: "global-bank" },
+        ],
       }),
     );
     mocked.client.recall.mockImplementation(async (...args: unknown[]) => ({
@@ -948,7 +1034,7 @@ describe("extension hooks", () => {
     expect(mocked.ensureGlobalBank).toHaveBeenCalledWith(
       mocked.client,
       "global-bank",
-      expect.objectContaining({ enabled: true, bankId: "global-bank", enableObservations: true }),
+      expect.objectContaining({ enableObservations: true, agentUse: "coding" }),
     );
   });
 
@@ -960,7 +1046,15 @@ describe("extension hooks", () => {
       join(cwd, ".pi", "hindsight.json"),
       JSON.stringify({
         setupComplete: true,
-        banks: { project: { enabled: true, bankId: "test-coding", derive: "manual" } },
+        banks: [
+          {
+            id: "coding",
+            alias: "project",
+            enabled: true,
+            bankId: "test-coding",
+            derive: "manual",
+          },
+        ],
         recall: { injectionPosition: "prepend" },
       }),
     );
@@ -997,7 +1091,15 @@ describe("extension hooks", () => {
       join(cwd, ".pi", "hindsight.json"),
       JSON.stringify({
         setupComplete: true,
-        banks: { project: { enabled: true, bankId: "test-coding", derive: "manual" } },
+        banks: [
+          {
+            id: "coding",
+            alias: "project",
+            enabled: true,
+            bankId: "test-coding",
+            derive: "manual",
+          },
+        ],
         recall: { injectionPosition: "append" },
       }),
     );
@@ -1071,7 +1173,10 @@ describe("extension hooks", () => {
     writeFileSync(
       join(cwd, ".pi", "hindsight.json"),
       JSON.stringify({
-        banks: { project: { enabled: false }, global: { enabled: true, bankId: "global-bank" } },
+        banks: [
+          { id: "coding", alias: "project", enabled: false },
+          { id: "user", alias: "user", enabled: true, bankId: "global-bank" },
+        ],
         retain: { enabled: false },
       }),
     );
@@ -1097,7 +1202,7 @@ describe("extension hooks", () => {
     expect(mocked.ensureGlobalBank).toHaveBeenCalledWith(
       mocked.client,
       "global-bank",
-      expect.objectContaining({ enabled: true, bankId: "global-bank" }),
+      expect.objectContaining({ agentUse: "coding" }),
     );
   });
 
@@ -1109,11 +1214,16 @@ describe("extension hooks", () => {
       join(cwd, ".pi", "hindsight.json"),
       JSON.stringify({
         setupComplete: true,
-        banks: {
-          project: { enabled: true, bankId: "test-coding", derive: "manual" },
-          global: { enabled: true, bankId: "global-bank" },
-          user: { enabled: true, bankId: "global-bank" },
-        },
+        banks: [
+          {
+            id: "coding",
+            alias: "project",
+            enabled: true,
+            bankId: "test-coding",
+            derive: "manual",
+          },
+          { id: "user", alias: "user", enabled: true, bankId: "global-bank" },
+        ],
       }),
     );
     mocked.ensureGlobalBank.mockRejectedValueOnce(new Error("global down"));
@@ -1513,7 +1623,10 @@ describe("extension hooks", () => {
     writeFileSync(
       join(cwd, ".pi", "hindsight.json"),
       JSON.stringify({
-        banks: { project: { enabled: false }, global: { enabled: true, bankId: "global-bank" } },
+        banks: [
+          { id: "coding", alias: "project", enabled: false },
+          { id: "user", alias: "user", enabled: true, bankId: "global-bank" },
+        ],
       }),
     );
     const handlers: Record<string, Array<(event: any, ctx: any) => Promise<any>>> = {};
@@ -1550,7 +1663,15 @@ describe("extension hooks", () => {
       join(cwd, ".pi", "hindsight.json"),
       JSON.stringify({
         setupComplete: true,
-        banks: { project: { enabled: true, bankId: "test-coding", derive: "manual" } },
+        banks: [
+          {
+            id: "coding",
+            alias: "project",
+            enabled: true,
+            bankId: "test-coding",
+            derive: "manual",
+          },
+        ],
         retain: { enabled: false },
       }),
     );
@@ -1591,7 +1712,15 @@ describe("extension hooks", () => {
       JSON.stringify({
         setupComplete: true,
         hindsight: { baseUrl: "http://unused.test" },
-        banks: { project: { enabled: true, bankId: "test-coding", derive: "manual" } },
+        banks: [
+          {
+            id: "coding",
+            alias: "project",
+            enabled: true,
+            bankId: "test-coding",
+            derive: "manual",
+          },
+        ],
       }),
     );
     const handlers: Record<string, Array<(event: any, ctx: any) => Promise<any>>> = {};
@@ -1639,7 +1768,15 @@ describe("extension hooks", () => {
       JSON.stringify({
         setupComplete: true,
         hindsight: { baseUrl: "http://unused.test" },
-        banks: { project: { enabled: true, bankId: "test-coding", derive: "manual" } },
+        banks: [
+          {
+            id: "coding",
+            alias: "project",
+            enabled: true,
+            bankId: "test-coding",
+            derive: "manual",
+          },
+        ],
       }),
     );
     const sessionFile = join(cwd, "session.jsonl");
@@ -1684,7 +1821,15 @@ describe("extension hooks", () => {
       JSON.stringify({
         setupComplete: true,
         hindsight: { baseUrl: "http://unused.test" },
-        banks: { project: { enabled: true, bankId: "test-coding", derive: "manual" } },
+        banks: [
+          {
+            id: "coding",
+            alias: "project",
+            enabled: true,
+            bankId: "test-coding",
+            derive: "manual",
+          },
+        ],
         notifications: { startup: false },
       }),
     );
@@ -1754,7 +1899,15 @@ describe("extension hooks", () => {
       join(cwd, ".pi", "hindsight.json"),
       JSON.stringify({
         setupComplete: true,
-        banks: { project: { enabled: true, bankId: "test-coding", derive: "manual" } },
+        banks: [
+          {
+            id: "coding",
+            alias: "project",
+            enabled: true,
+            bankId: "test-coding",
+            derive: "manual",
+          },
+        ],
 
         retain: { shutdownFlushMaxJobs: 2, shutdownFlushTimeoutMs: 1_000 },
         notifications: { startup: false },
@@ -1798,11 +1951,16 @@ describe("extension hooks", () => {
       join(cwd, ".pi", "hindsight.json"),
       JSON.stringify({
         setupComplete: true,
-        banks: {
-          project: { enabled: true, bankId: "test-coding", derive: "manual" },
-          global: { enabled: false },
-          user: { enabled: false },
-        },
+        banks: [
+          {
+            id: "coding",
+            alias: "project",
+            enabled: true,
+            bankId: "test-coding",
+            derive: "manual",
+          },
+          { id: "life", alias: "user", enabled: false },
+        ],
         notifications: { startup: false, recall: true, retain: true },
       }),
     );
@@ -1850,7 +2008,15 @@ describe("extension hooks", () => {
       join(cwd, ".pi", "hindsight.json"),
       JSON.stringify({
         setupComplete: true,
-        banks: { project: { enabled: true, bankId: "test-coding", derive: "manual" } },
+        banks: [
+          {
+            id: "coding",
+            alias: "project",
+            enabled: true,
+            bankId: "test-coding",
+            derive: "manual",
+          },
+        ],
         retain: { postRetainReflect: true },
       }),
     );
@@ -1891,7 +2057,15 @@ describe("extension hooks", () => {
       join(cwd, ".pi", "hindsight.json"),
       JSON.stringify({
         setupComplete: true,
-        banks: { project: { enabled: true, bankId: "test-coding", derive: "manual" } },
+        banks: [
+          {
+            id: "coding",
+            alias: "project",
+            enabled: true,
+            bankId: "test-coding",
+            derive: "manual",
+          },
+        ],
         retain: { postRetainReflect: true },
       }),
     );

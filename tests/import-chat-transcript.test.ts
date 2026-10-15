@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { banks } from "./helpers/bank-config.js";
 import { mkdtempSync, mkdirSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -306,11 +307,10 @@ describe("chat transcript import", () => {
         getProjectBankId: () => "project-bank",
         getConfig: () => ({
           ...DEFAULT_CONFIG,
-          banks: {
-            ...DEFAULT_CONFIG.banks,
+          banks: banks({
             user: { enabled: true, bankId: "configured-user-bank" },
             global: { enabled: true, bankId: "configured-user-bank" },
-          },
+          }),
         }),
       },
     );

@@ -7,6 +7,9 @@ import {
   type MemoryProfile,
   type ProjectConfigPatchInput,
 } from "./config-writer.js";
+import type { BankConfigEntry } from "../types.js";
+import { bankEntryEnabled, bankMissionSettings, codingBankEntry, userBankEntry } from "./banks.js";
+import { deleteAtBankPath, valueAtBankPath } from "./banks.js";
 import {
   CONFIG_FIELD_PATHS,
   CONFIG_FIELD_RESET_KEYS,
@@ -55,9 +58,11 @@ export type ConfigEditingTab = {
 export { CONFIG_FIELD_PATHS, CONFIG_FIELD_RESET_KEYS } from "./config-field-paths.js";
 
 function memoryProfileLabel(config: ResolvedConfig): MemoryProfile {
+  const coding = codingBankEntry(config);
+  const user = userBankEntry(config);
   if (config.recall.enabled && !config.retain.enabled) return "recall-only";
-  if (!config.banks.project.enabled) return "global-only";
-  if (config.banks.user.enabled) return "project+global";
+  if (!coding || !bankEntryEnabled(coding)) return "global-only";
+  if (user && bankEntryEnabled(user)) return "project+global";
   return "project-only";
 }
 
@@ -155,12 +160,8 @@ function selectField(
 }
 
 function valueAt(config: Record<string, unknown>, path: readonly string[]): unknown {
-  let value: unknown = config;
-  for (const part of path) {
-    if (typeof value !== "object" || value === null || Array.isArray(value)) return undefined;
-    value = (value as Record<string, unknown>)[part];
-  }
-  return value;
+  // `banks` is an array: resolve the first path segment by entry id or alias.
+  return valueAtBankPath(config, path);
 }
 
 function displayLayerValue(fieldId: FieldId, value: unknown): string | undefined {
@@ -232,8 +233,10 @@ export function buildBaseConfigEditingFields(
   const defaults = DEFAULT_CONFIG;
   const profile = memoryProfileLabel(config);
   const defaultProfile = memoryProfileLabel(defaults);
-  const globalBankId = config.banks.user.bankId ?? "not set";
-  const defaultGlobalBankId = defaults.banks.user.bankId ?? "not set";
+  const userBank = userBankEntry(config);
+  const defaultUserBank = userBankEntry(defaults);
+  const globalBankId = userBank?.bankId ?? "not set";
+  const defaultGlobalBankId = defaultUserBank?.bankId ?? "not set";
   return [
     booleanField({
       id: "enabled",
@@ -324,7 +327,7 @@ export function buildBaseConfigEditingFields(
         "Shared coding bank for domain-tagged mode (prefer user/global config). Isolated mode may pin a per-repo bank.",
       value: projectBankId,
       defaultValue: "auto-derived",
-      changed: Boolean(config.banks.project.bankId),
+      changed: Boolean(codingBankEntry(config)?.bankId),
       resetKey: "banks.project.bankId",
     }),
     booleanField({
@@ -332,8 +335,8 @@ export function buildBaseConfigEditingFields(
       tab: "Banks",
       label: "User memory enabled",
       description: "Allows cross-project recall from a shared bank.",
-      value: config.banks.user.enabled,
-      defaultValue: defaults.banks.user.enabled,
+      value: Boolean(userBank && bankEntryEnabled(userBank)),
+      defaultValue: Boolean(defaultUserBank && bankEntryEnabled(defaultUserBank)),
       resetKey: "banks.global.enabled",
     }),
     textField({
@@ -738,7 +741,7 @@ export function patchForConfigEditingField(
     case "memoryProfile":
       return {
         memoryProfile: value as MemoryProfile,
-        globalBankId: config.banks.user.bankId ?? DEFAULT_GLOBAL_BANK_ID,
+        globalBankId: userBankEntry(config)?.bankId ?? DEFAULT_GLOBAL_BANK_ID,
       };
     case "agentUse":
       return { agentUse: value as "coding" | "conversation" };
@@ -834,19 +837,19 @@ export function inputDefaultForConfigEditingField(
     case "projectBankId":
       return projectBankId;
     case "projectRetainMission":
-      return config.banks.project.retainMission ?? "";
+      return bankMissionSettings(codingBankEntry(config)).retainMission ?? "";
     case "projectReflectMission":
-      return config.banks.project.reflectMission ?? "";
+      return bankMissionSettings(codingBankEntry(config)).reflectMission ?? "";
     case "projectObservationsMission":
-      return config.banks.project.observationsMission ?? "";
+      return bankMissionSettings(codingBankEntry(config)).observationsMission ?? "";
     case "globalBankId":
-      return config.banks.user.bankId ?? DEFAULT_GLOBAL_BANK_ID;
+      return userBankEntry(config)?.bankId ?? DEFAULT_GLOBAL_BANK_ID;
     case "globalRetainMission":
-      return config.banks.user.retainMission ?? "";
+      return bankMissionSettings(userBankEntry(config)).retainMission ?? "";
     case "globalReflectMission":
-      return config.banks.user.reflectMission ?? "";
+      return bankMissionSettings(userBankEntry(config)).reflectMission ?? "";
     case "globalObservationsMission":
-      return config.banks.user.observationsMission ?? "";
+      return bankMissionSettings(userBankEntry(config)).observationsMission ?? "";
     case "globalRetainMode":
       return config.userRetain.mode;
     case "timeoutMs":
@@ -874,12 +877,23 @@ export function inputDefaultForConfigEditingField(
   }
 }
 
+/** Enabled bank entry for a role, or undefined when the role is off/missing. */
+function activeRoleEntry(
+  config: ResolvedConfig,
+  alias: "project" | "user",
+): BankConfigEntry | undefined {
+  const entry = alias === "project" ? codingBankEntry(config) : userBankEntry(config);
+  return entry && bankEntryEnabled(entry) ? entry : undefined;
+}
+
 export function buildStatusFacts(
   config: ResolvedConfig,
   projectBankId: string,
   extraFacts: Array<[string, string]> = [],
 ): Array<[string, string]> {
   const profile = memoryProfileLabel(config);
+  const activeCoding = activeRoleEntry(config, "project");
+  const activeUser = activeRoleEntry(config, "user");
   return [
     ...extraFacts,
     ["Extension", enabledDisabled(config.enabled)],
@@ -891,14 +905,9 @@ export function buildStatusFacts(
         ? `inject on (budget ${config.mentalModels.maxChars}; apply with t; cache ${config.mentalModels.cacheTtlMs}ms)`
         : "inject off",
     ],
-    ["Active project bank", config.banks.project.enabled ? projectBankId : "disabled"],
-    [
-      "User bank",
-      config.banks.user.enabled ? (config.banks.user.bankId ?? "missing id") : "disabled",
-    ],
-    ...(config.banks.project.retainMission ||
-    config.banks.project.reflectMission ||
-    config.banks.project.observationsMission
+    ["Active project bank", activeCoding ? projectBankId : "disabled"],
+    ["User bank", activeUser ? (activeUser.bankId ?? "missing id") : "disabled"],
+    ...(Object.keys(bankMissionSettings(activeCoding)).length > 0
       ? [
           ["Project mission overrides", "legacy local config; prefer Hindsight bank config"] as [
             string,
@@ -906,9 +915,7 @@ export function buildStatusFacts(
           ],
         ]
       : []),
-    ...(config.banks.user.retainMission ||
-    config.banks.user.reflectMission ||
-    config.banks.user.observationsMission
+    ...(Object.keys(bankMissionSettings(activeUser)).length > 0
       ? [
           ["User mission overrides", "legacy local config; prefer Hindsight bank config"] as [
             string,

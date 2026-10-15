@@ -16,11 +16,11 @@ export const DEFAULT_CONFIG: ResolvedConfig = {
     maxChars: 12_000,
     cacheTtlMs: 300_000,
   },
-  banks: {
-    project: { enabled: true, derive: "repo" },
-    global: { enabled: false },
-    user: { enabled: false },
-  },
+  banks: [
+    { id: "coding", alias: "project", enabled: true, access: "read-write", derive: "repo" },
+    { id: "life", alias: "user", enabled: false, access: "read-write" },
+  ],
+  banksFallback: [],
   recall: {
     enabled: true,
     budget: "mid",

@@ -22,13 +22,11 @@ import {
   selectMentalModelTargetsToOffer,
   setupProfileChoiceToMemoryProfile,
 } from "../extensions/tui/guided-setup.js";
+import { banks } from "./helpers/bank-config.js";
 
 const configuredGlobal = {
   ...DEFAULT_CONFIG,
-  banks: {
-    ...DEFAULT_CONFIG.banks,
-    user: { ...DEFAULT_CONFIG.banks.user, bankId: "global-luxus" },
-  },
+  banks: banks({ user: { bankId: "global-luxus" } }),
 };
 
 /** Isolate global config writes from the real user home. */
