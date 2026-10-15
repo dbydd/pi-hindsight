@@ -481,7 +481,9 @@ describe("resolveConfig", () => {
       }),
     );
 
-    const config = resolveConfig(cwd);
+    // Isolate HOME: this test asserts defaults, and a developer's real
+    // ~/.pi/agent/hindsight.json would otherwise merge in and override them.
+    const config = resolveConfig(cwd, { ...process.env, HOME: tmp() });
     expect(config.recall.budget).toBe("mid");
     expect(config.recall.maxTokens).toBe(800);
     expect(config.recall.types).toEqual(["observation"]);
