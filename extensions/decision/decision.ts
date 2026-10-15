@@ -76,11 +76,14 @@ export function createDecisionLayer(deps: DecisionLayerDeps): DecisionLayer {
       }
 
       // Key shape follows the recall cache: offered bank ids plus the newest user
-      // message content, so an auto-continue retry reuses this decision.
+      // message content, so an auto-continue retry reuses this decision. Ids carry
+      // their direction, because the recall call (read candidates) and the retain
+      // call (write candidates) of one turn can offer the same ids with different
+      // question tables and must not share a cached result.
       const cacheKey = recallTurnCacheKey(
         [
-          ...request.readCandidates.map((candidate) => candidate.id),
-          ...request.writeCandidates.map((candidate) => candidate.id),
+          ...request.readCandidates.map((candidate) => `read:${candidate.id}`),
+          ...request.writeCandidates.map((candidate) => `write:${candidate.id}`),
         ],
         request.messages,
       );
@@ -187,10 +190,13 @@ function buildQuestions(
 }
 
 /**
- * Turn answers into a result. Gate A must be answered — a backend that skips it
- * is a failed rung, not a silent "no recall". Bank answers run through the
- * second filter here: anything the prompt did not offer, or offered for a bank
- * that is no longer enabled and access-compatible, is dropped and reported.
+ * Turn answers into a result. When read candidates were offered, gate A must be
+ * answered — a backend that skips it is a failed rung, not a silent "no recall".
+ * A write-only call (retain routing) is never asked gate A, so nothing is
+ * required of it and `inject` stays false: no read gate was decided. Bank answers
+ * run through the second filter here: anything the prompt did not offer, or
+ * offered for a bank that is no longer enabled and access-compatible, is dropped
+ * and reported.
  */
 function interpretAnswers(
   answers: DecisionAnswers,
@@ -198,10 +204,11 @@ function interpretAnswers(
   config: ResolvedConfig,
   backendLabel: string,
 ): { result: DecisionResult; droppedBanks: string[] } {
-  if (answers[INJECT_QUESTION_ID] === undefined) {
+  const askedInject = request.readCandidates.length > 0;
+  if (askedInject && answers[INJECT_QUESTION_ID] === undefined) {
     throw new DecisionAnswerError(`backend "${backendLabel}" did not answer the inject gate`);
   }
-  const inject = answers[INJECT_QUESTION_ID] === true;
+  const inject = askedInject && answers[INJECT_QUESTION_ID] === true;
   const read = pickBanks({
     prefix: READ_QUESTION_PREFIX,
     answers,

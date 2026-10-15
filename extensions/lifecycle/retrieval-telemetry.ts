@@ -9,7 +9,8 @@ export interface RetrievalResultRef {
 
 export interface RetrievalTelemetry {
   version: 1;
-  phase: "retrieval" | "injection" | "decision";
+  /** Memory path that produced the span: recall retrieval, recall injection, routing decision, retain routing. */
+  phase: "retrieval" | "injection" | "decision" | "retain";
   mode: "automatic" | "explicit";
   startedAt: string;
   endedAt: string;

@@ -1,6 +1,7 @@
 import {
   RECALL_SCORE_FIELDS,
   type BankConfigEntry,
+  type BankRetainMode,
   type DecisionConfig,
   type HindsightEntityInput,
   type RecallMinScores,
@@ -191,6 +192,39 @@ function hasConfiguredRecallField(rawConfig: unknown, field: string): boolean {
   return isRecord(rawConfig) && isRecord(rawConfig.recall) && field in rawConfig.recall;
 }
 
+/**
+ * The legacy `userRetain.mode` / `globalRetain.mode` value a config layer declared,
+ * if any. Both are single-valued (`explicit-only`) today; a nonsense value stays
+ * unread here and falls back to the default in the `userRetain` section below.
+ */
+function declaredUserRetainMode(rawConfig: unknown): BankRetainMode | undefined {
+  if (!isRecord(rawConfig)) return undefined;
+  for (const key of ["userRetain", "globalRetain"]) {
+    const section = rawConfig[key];
+    if (isRecord(section) && section.mode === "explicit-only") return "explicit-only";
+  }
+  return undefined;
+}
+
+/**
+ * Map a legacy `userRetain.mode` / `globalRetain.mode` onto the user entry's
+ * `retain.mode`, so a config that predates the `banks` array keeps stating the
+ * User Bank write mode in the new place. An entry that declares its own mode wins:
+ * the guided-setup writer sets the legacy field for every profile.
+ */
+function applyLegacyUserRetainMode(
+  banks: BankConfigEntry[],
+  rawConfig: unknown,
+): BankConfigEntry[] {
+  const mode = declaredUserRetainMode(rawConfig);
+  if (!mode) return banks;
+  const index = banks.findIndex((entry) => entry.alias === "user");
+  if (index < 0 || banks[index]!.retain?.mode) return banks;
+  return banks.map((entry, at) =>
+    at === index ? { ...entry, retain: { ...entry.retain, mode } } : entry,
+  );
+}
+
 export function normalizeConfig(
   config: ResolvedConfig,
   rawConfig?: unknown,
@@ -204,7 +238,11 @@ export function normalizeConfig(
     directApiKey(config.hindsight?.apiKey, DEFAULT_CONFIG.hindsight.apiKey) ??
     resolveApiKeyRef(apiKeyRef, env);
   // `banks` may be the new array or the legacy three-slot object; both normalize here.
-  const banks = normalizeBankEntries(config.banks, DEFAULT_CONFIG.banks);
+  // The legacy user-retain mode then lands on the user entry, its new home.
+  const banks = applyLegacyUserRetainMode(
+    normalizeBankEntries(config.banks, DEFAULT_CONFIG.banks),
+    rawConfig,
+  );
   const banksFallback = normalizeBanksFallback(config.banksFallback, banks);
   const minScores = scoreFloors(config.recall?.minScores);
   const scopeRaw = (

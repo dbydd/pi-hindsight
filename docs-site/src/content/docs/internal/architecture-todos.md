@@ -6,7 +6,7 @@ These notes record deepening work completed after the mission/global-memory pass
 
 ## Memory routing
 
-- `globalRetain.mode`/`userRetain.mode` is `"explicit-only"` in every profile; automatic retain always targets the Project Bank only. The heuristic memory router that used to classify content into project/global/both/skip was removed per ADR 004; User Bank writes are always explicit (tool or command).
+- `globalRetain.mode`/`userRetain.mode` is `"explicit-only"` in every profile and maps onto the user entry's `banks[].retain.mode`. Automatic retain targets the entries whose mode is not `explicit-only`: the coding role by default, the user entry only when a config sets it to `always` or `decision`. The heuristic memory router that used to classify content into project/global/both/skip was removed per ADR 004; `retain.mode: "decision"` replaced it as the model-driven write router.
 
 ## Config editing
 

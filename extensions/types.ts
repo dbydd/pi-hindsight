@@ -117,7 +117,13 @@ export interface BankEntryRecallSettings {
 }
 
 export interface BankEntryRetainSettings {
+  /** `false` means this entry never receives automatic writes. Default `true`. */
   enabled?: boolean;
+  /**
+   * Automatic-retain routing: `always` writes on every retain turn, `decision`
+   * asks the decision model, `explicit-only` never writes automatically. Defaults
+   * to `always` on the coding-role entry and `explicit-only` on every other entry.
+   */
   mode?: BankRetainMode;
 }
 

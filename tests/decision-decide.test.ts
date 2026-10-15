@@ -170,6 +170,28 @@ describe("decision routing", () => {
     expect(events.decisionEvents.at(-1)?.status).toBe("skipped");
   });
 
+  it("answers a write-only call, so retain routing reaches the model", async () => {
+    const events = collectEvents();
+    const backend = recordingBackend({ "write:coding": true, "write:archive": false });
+    const layer = createDecisionLayer({
+      host: fakeHost({ backends: () => [backend] }),
+      getConfig: () => config({ banksFallback: ["life"] }),
+      observer: events.observer,
+    });
+
+    const result = await layer.decide(request({ readCandidates: [], writeCandidates: WRITE }));
+
+    // No inject gate was asked, so nothing is required of the backend but the write table.
+    expect(backend.calls).toBe(1);
+    expect(backend.lastQuestions).toEqual(["write:coding", "write:archive"]);
+    expect(result).toEqual({
+      inject: false,
+      readBanks: [],
+      writeBanks: ["coding"],
+      reason: "test-backend",
+    });
+  });
+
   it("passes the task state into the prompt and survives an unreadable one", async () => {
     const backend = recordingBackend({ inject: true });
     const layer = createDecisionLayer({
@@ -358,7 +380,10 @@ describe("decision cache", () => {
       reason: "cached",
     };
     const cache = createDecisionCache(60_000, () => 0);
-    cache.set(recallTurnCacheKey(["coding", "life", "coding", "archive"], messages), preloaded);
+    cache.set(
+      recallTurnCacheKey(["read:coding", "read:life", "write:coding", "write:archive"], messages),
+      preloaded,
+    );
     const backend = recordingBackend({ inject: true });
     const layer = createDecisionLayer({
       host: fakeHost({ backends: () => [backend] }),
@@ -386,6 +411,34 @@ describe("decision cache", () => {
     await layer.decide(request());
     await layer.decide(request());
     expect(attempts).toBe(2);
+  });
+
+  it("keeps a recall call and a retain call for the same turn on separate keys", async () => {
+    const messages = [{ role: "user", content: "hello", timestamp: 1 }];
+    const cache = createDecisionCache(60_000, () => 0);
+    const backend = recordingBackend({ inject: true, "read:coding": true, "write:coding": true });
+    const layer = createDecisionLayer({
+      host: fakeHost({ backends: () => [backend] }),
+      getConfig: () => config({ banksFallback: ["coding"] }),
+      cache,
+      now: () => 0,
+    });
+    const coding: DecisionBankCandidate[] = [{ id: "coding", access: "read-write" }];
+
+    // The recall call offers the bank for reading only, so it asks no write question.
+    const recall = await layer.decide(
+      request({ readCandidates: coding, writeCandidates: [], messages }),
+    );
+    expect(recall.writeBanks).toEqual([]);
+
+    // Same bank ids, same user turn, opposite direction: the recall result must not be reused.
+    const retain = await layer.decide(
+      request({ readCandidates: [], writeCandidates: coding, messages }),
+    );
+
+    expect(backend.calls).toBe(2);
+    expect(retain.writeBanks).toEqual(["coding"]);
+    expect(retain.reason).toBe("test-backend");
   });
 });
 

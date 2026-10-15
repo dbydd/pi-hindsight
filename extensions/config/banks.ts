@@ -297,12 +297,43 @@ export function userBankEntry(config: ResolvedConfig): BankConfigEntry | undefin
   return config.banks.find((entry) => entry.alias === "user");
 }
 
+/**
+ * True when `entry` fills the coding role for this config: the `project` alias
+ * entry, an entry whose id is `project`, or the first entry (`codingBankEntry`).
+ */
+export function isCodingBankEntry(config: ResolvedConfig, entry: BankConfigEntry): boolean {
+  return codingBankEntry(config)?.id === entry.id;
+}
+
 export function readableBankEntries(config: ResolvedConfig): BankConfigEntry[] {
   return config.banks.filter((entry) => bankEntryEnabled(entry) && canReadBank(entry));
 }
 
 export function writableBankEntries(config: ResolvedConfig): BankConfigEntry[] {
   return config.banks.filter((entry) => bankEntryEnabled(entry) && canWriteBank(entry));
+}
+
+/**
+ * Effective automatic-retain mode. The coding-role entry writes every retain turn
+ * unless it declares otherwise; every other entry is `explicit-only`, so a bank
+ * added to the array never starts receiving automatic writes on its own.
+ */
+export function bankRetainMode(config: ResolvedConfig, entry: BankConfigEntry): BankRetainMode {
+  return entry.retain?.mode ?? (isCodingBankEntry(config, entry) ? "always" : "explicit-only");
+}
+
+/**
+ * Entries automatic retain may pick from: enabled, write-capable, not switched
+ * off by `retain.enabled: false`, and carrying a mode other than `explicit-only`.
+ */
+export function autoRetainEntries(config: ResolvedConfig): BankConfigEntry[] {
+  return config.banks.filter(
+    (entry) =>
+      bankEntryEnabled(entry) &&
+      canWriteBank(entry) &&
+      entry.retain?.enabled !== false &&
+      bankRetainMode(config, entry) !== "explicit-only",
+  );
 }
 
 /** Entry missions mapped onto the flat shape the bank ensure path expects. */

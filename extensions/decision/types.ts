@@ -99,7 +99,11 @@ export interface DecisionRequest {
 }
 
 export interface DecisionResult {
-  /** Whether automatic recall should inject this turn. */
+  /**
+   * Whether automatic recall should inject this turn. Only meaningful when the
+   * request offered read candidates: a write-only call is never asked the inject
+   * gate, and reports `false` because no read gate was decided.
+   */
   inject: boolean;
   /** Bank ids selected for the read (recall) path, in candidate order. */
   readBanks: string[];
