@@ -275,7 +275,7 @@ Required:
 
 Agent control plane (selected banks only; ADR-005):
 
-- `hindsight_status`, `hindsight_seed_git` (opt-in gitlog seed), `hindsight_scope`, `hindsight_config` (allowlisted get/patch; no raw secrets), `hindsight_bank`, `hindsight_mental_model`, `hindsight_knowledge`
+- `hindsight_status`, `hindsight_seed_git` (opt-in gitlog seed), `hindsight_scope`, `hindsight_config_get` / `hindsight_config_set` (allowlisted get/patch; no raw secrets), `hindsight_bank_list` / `hindsight_bank_get` / `hindsight_bank_set_mission`, `hindsight_mm_*` (mental models), `hindsight_kb_*` (knowledge pages)
 - `hindsight_scope_migrate` (dry-run dual-tag / legacy guidance + local receipt; never silent rewrite)
 
 Human surface (thin TUI):

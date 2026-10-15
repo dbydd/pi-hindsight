@@ -181,6 +181,6 @@ to the Project Bank only — the User Bank joins automatic retain only when its 
 `always` or `decision`. `globalRetain.mode`/`userRetain.mode` is single-valued (`explicit-only`)
 and maps onto the user entry's mode.
 
-`hindsight_retain_global` is the preferred tool for durable global user identity, preferences, and cross-project workflows.
+`hindsight_retain_user` is the preferred tool for durable global user identity, preferences, and cross-project workflows.
 
 ADR 004 removed the heuristic memory router that used to classify retain candidates as `project`, `global`, `both`, or `skip`; ADR 002 documents the explicit routing strategy seam it superseded.

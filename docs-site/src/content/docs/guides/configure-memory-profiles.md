@@ -17,7 +17,7 @@ Add **Life** only if you want a separate personal bank. Use **Isolated** only wh
 | **Life only**            | Life bank                  | Off              | Non-repo personal memory         |
 | **Recall only**          | Configured banks           | Off              | Cautious / read-mostly use       |
 
-Automatic retain never writes the Life / User bank. Use `hindsight_retain_global` (or a command) for explicit life writes.
+Automatic retain never writes the Life / User bank. Use `hindsight_retain_user` (or a command) for explicit life writes.
 
 ## Configure through `/hindsight`
 

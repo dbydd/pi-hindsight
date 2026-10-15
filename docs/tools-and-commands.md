@@ -28,7 +28,7 @@ Pi Hindsight is **TUI-first**. Public slash commands:
 | `a` | Toggle advanced settings (prefer agent tools for day-to-day edits)                                                       |
 | `q` | Close                                                                                                                    |
 
-Day-to-day mission, mental-model, knowledge-page, and config edits: prefer agent control-plane tools (`hindsight_status`, `hindsight_config`, `hindsight_bank`, `hindsight_mental_model`, `hindsight_knowledge`); the advanced TUI farm is an escape hatch, not the primary surface.
+Day-to-day mission, mental-model, knowledge-page, and config edits: prefer agent control-plane tools (`hindsight_status`, `hindsight_config_get` / `hindsight_config_set`, `hindsight_bank_list` / `hindsight_bank_get` / `hindsight_bank_set_mission`, `hindsight_mm_*`, `hindsight_kb_*`); the advanced TUI farm is an escape hatch, not the primary surface.
 
 ### Agent use and mental models
 
@@ -49,15 +49,34 @@ Available for the agent (control plane is agent-first; TUI is thin):
 
 - `hindsight_recall`
 - `hindsight_retain`
-- `hindsight_retain_global`
+- `hindsight_retain_user` — explicit user-bank writes (global identity/prefs/cross-project workflows)
+- `hindsight_seed_git` — opt-in gitlog seed
 - `hindsight_reflect`
 - `hindsight_status` — setup/banks/scope tones
 - `hindsight_scope` — project id derivation
-- `hindsight_config` — allowlisted config get/patch (dry-run default on patch; no raw secrets)
-- `hindsight_bank` — get bank or update missions (dry-run default)
-- `hindsight_mental_model` — list/get/create/update/refresh/delete (list is metadata-only; use get for full content; mutating actions dry-run by default)
-- `hindsight_knowledge` — tree/search/get/export/create_page/create_folder/update/delete for knowledge pages (mutating dry-run default; requires knowledge-base-capable client/server; pages are tool-driven, not auto-injected; export = full-bank markdown bundle only)
+- `hindsight_config_get` — read the allowlisted effective config (no raw secrets)
+- `hindsight_config_set` — patch allowlisted config keys (dry-run default on set)
+- `hindsight_bank_list` — Pi-configured banks (id, bankId, role, enabled, access, retain mode); no Hindsight round-trip
+- `hindsight_bank_get` — one bank's Hindsight-side facts (existence/stats/config)
+- `hindsight_bank_set_mission` — patch retain/reflect/observations mission text (dry-run default)
+- `hindsight_mm_list` — mental-model metadata only
+- `hindsight_mm_get` — full mental-model content
+- `hindsight_mm_create` — create one model (dry-run default)
+- `hindsight_mm_update` — patch one model by id (dry-run default)
+- `hindsight_mm_refresh` — regenerate one model's content (dry-run default)
+- `hindsight_mm_delete` — delete one model by id (dry-run default)
+- `hindsight_kb_tree` — knowledge-page tree (read-only)
+- `hindsight_kb_search` — hybrid-search knowledge pages (read-only)
+- `hindsight_kb_get` — read one knowledge page (read-only)
+- `hindsight_kb_create_page` — create one knowledge page (dry-run default)
+- `hindsight_kb_create_folder` — create one knowledge page folder (dry-run default)
+- `hindsight_kb_update` — patch one knowledge page or folder (dry-run default)
+- `hindsight_kb_delete` — delete one knowledge page or folder (dry-run default)
+- `hindsight_kb_seed_taxonomy` — seed the fixed five-page coding taxonomy (dry-run default; idempotent)
+- `hindsight_kb_export` — full-bank markdown bundle (read-only)
 - `hindsight_scope_migrate` — dry-run dual-tag / legacy `repo:` migration plan + local receipt (never rewrites)
+
+Knowledge-page tools require a knowledge-base-capable client/server; pages are tool-driven, not auto-injected.
 
 ### Tool exposure and discovery
 
@@ -69,7 +88,7 @@ Exposure is generated from one table (`extensions/operations/tool-presentation.t
 
 **Cold path** — moved behind on-demand discovery:
 
-- `hindsight_retain_global`, `hindsight_seed_git`, `hindsight_scope`, `hindsight_config`, `hindsight_bank`, `hindsight_mental_model`, `hindsight_knowledge`, `hindsight_scope_migrate`
+- `hindsight_retain_user`, `hindsight_seed_git`, `hindsight_scope`, `hindsight_config_get`, `hindsight_config_set`, `hindsight_bank_list`, `hindsight_bank_get`, `hindsight_bank_set_mission`, `hindsight_mm_list`, `hindsight_mm_get`, `hindsight_mm_create`, `hindsight_mm_update`, `hindsight_mm_refresh`, `hindsight_mm_delete`, `hindsight_kb_tree`, `hindsight_kb_search`, `hindsight_kb_get`, `hindsight_kb_create_page`, `hindsight_kb_create_folder`, `hindsight_kb_update`, `hindsight_kb_delete`, `hindsight_kb_seed_taxonomy`, `hindsight_kb_export`, `hindsight_scope_migrate`
 - Any tool added later without a resident entry lands here too (cold path is the default).
 
 Host controls:

@@ -20,6 +20,7 @@ type JsonSchema = {
   anyOf?: JsonSchema[];
   const?: unknown;
   minimum?: number;
+  required?: string[];
 };
 
 function client(): HindsightLikeClient {
@@ -53,7 +54,7 @@ describe("operation catalog", () => {
     for (const name of [
       "hindsight_recall",
       "hindsight_retain",
-      "hindsight_retain_global",
+      "hindsight_retain_user",
       "hindsight_reflect",
     ]) {
       expect(requireTool(catalog, name).renderResult).toBeTypeOf("function");
@@ -441,7 +442,7 @@ describe("operation catalog", () => {
     );
   });
 
-  it("maps advanced explicit retain options on the global retain tool", async () => {
+  it("maps advanced explicit retain options on the user retain tool", async () => {
     const retain = retainMock();
     const cwd = mkdtempSync(join(tmpdir(), "pi-hindsight-catalog-"));
     const config: ResolvedConfig = {
@@ -453,7 +454,7 @@ describe("operation catalog", () => {
       getConfig: () => config,
       getProjectBankId: () => "project-bank",
     });
-    const tool = requireTool(catalog, "hindsight_retain_global");
+    const tool = requireTool(catalog, "hindsight_retain_user");
 
     await tool.execute(
       "call",
@@ -486,6 +487,184 @@ describe("operation catalog", () => {
     );
   });
 
+  it("retains durable user memory through retain_user and retain with bank=global alike", async () => {
+    const retain = retainMock();
+    const cwd = mkdtempSync(join(tmpdir(), "pi-hindsight-catalog-"));
+    const config: ResolvedConfig = {
+      ...DEFAULT_CONFIG,
+      banks: banks({ user: { enabled: true, bankId: "global-bank" } }),
+    };
+    const catalog = createOperationCatalog({
+      getClient: () => ({ ...client(), retain }),
+      getConfig: () => config,
+      getProjectBankId: () => "project-bank",
+    });
+    const ctx = { cwd, sessionManager: {} } as never;
+    const call = { content: "Same durable preference", context: "unit test equivalence" };
+
+    await requireTool(catalog, "hindsight_retain_user").execute(
+      "call",
+      call,
+      undefined,
+      undefined,
+      ctx,
+    );
+    await requireTool(catalog, "hindsight_retain").execute(
+      "call",
+      { ...call, bank: "global" },
+      undefined,
+      undefined,
+      ctx,
+    );
+
+    expect(retain).toHaveBeenCalledTimes(2);
+    const [userId, userContent, userOptions] = retain.mock.calls[0]!;
+    const [bankId, bankContent, bankOptions] = retain.mock.calls[1]!;
+    expect(userId).toBe("global-bank");
+    expect(bankId).toBe("global-bank");
+    expect(userContent).toBe(bankContent);
+    expect(userOptions?.documentId).toBe(bankOptions?.documentId);
+  });
+
+  it("lists the Pi-configured banks through hindsight_bank_list without a client call", async () => {
+    const catalog = createOperationCatalog({
+      getClient: () => {
+        throw new Error("hindsight_bank_list must not call the Hindsight client");
+      },
+      getConfig: () => ({
+        ...DEFAULT_CONFIG,
+        banks: banks({ coding: { bankId: "coding-bank" }, user: { bankId: "user-bank" } }),
+      }),
+      getProjectBankId: () => "coding-bank",
+    });
+
+    const result = await requireTool(catalog, "hindsight_bank_list").execute(
+      "call",
+      {},
+      undefined,
+      undefined,
+      { cwd: mkdtempSync(join(tmpdir(), "pi-hindsight-catalog-")), sessionManager: {} } as never,
+    );
+
+    const details = result.details as {
+      projectBankId: string;
+      banks: Array<Record<string, unknown>>;
+    };
+    expect(details.projectBankId).toBe("coding-bank");
+    expect(
+      details.banks.map((entry) => [
+        entry.id,
+        entry.bankId,
+        entry.role,
+        entry.enabled,
+        entry.access,
+        entry.retainMode,
+      ]),
+    ).toEqual([
+      ["project", "coding-bank", "coding", true, "read-write", "always"],
+      ["user", "user-bank", "user", false, "read-write", "explicit-only"],
+    ]);
+  });
+
+  it("drops the action enum and the old combined tool names", () => {
+    const catalog = createOperationCatalog({
+      getClient: () => client(),
+      getConfig: () => DEFAULT_CONFIG,
+      getProjectBankId: () => "bank",
+    });
+
+    for (const tool of catalog.tools) {
+      const properties = (tool.parameters as JsonSchema).properties ?? {};
+      expect(properties.action, tool.name).toBeUndefined();
+    }
+
+    const names = catalog.tools.map((tool) => tool.name);
+    for (const legacy of [
+      "hindsight_config",
+      "hindsight_bank",
+      "hindsight_mental_model",
+      "hindsight_knowledge",
+      "hindsight_retain_global",
+    ]) {
+      expect(names, legacy).not.toContain(legacy);
+    }
+  });
+
+  it("splits each family into tools carrying only their own operation's parameters", () => {
+    const catalog = createOperationCatalog({
+      getClient: () => client(),
+      getConfig: () => DEFAULT_CONFIG,
+      getProjectBankId: () => "bank",
+    });
+    const splitTools = [
+      "hindsight_config_get",
+      "hindsight_config_set",
+      "hindsight_bank_list",
+      "hindsight_bank_get",
+      "hindsight_bank_set_mission",
+      "hindsight_mm_list",
+      "hindsight_mm_get",
+      "hindsight_mm_create",
+      "hindsight_mm_update",
+      "hindsight_mm_refresh",
+      "hindsight_mm_delete",
+      "hindsight_kb_tree",
+      "hindsight_kb_search",
+      "hindsight_kb_get",
+      "hindsight_kb_create_page",
+      "hindsight_kb_create_folder",
+      "hindsight_kb_update",
+      "hindsight_kb_delete",
+      "hindsight_kb_seed_taxonomy",
+      "hindsight_kb_export",
+    ] as const;
+    /** Explicit retain overrides stay on the two retain tools only. */
+    const retainOnlyParams = [
+      "documentId",
+      "timestamp",
+      "metadata",
+      "updateMode",
+      "observationScopes",
+      "documentTags",
+      "async",
+    ];
+
+    for (const name of splitTools) {
+      const properties = (requireTool(catalog, name).parameters as JsonSchema).properties ?? {};
+      expect(Object.keys(properties).length, name).toBeLessThanOrEqual(8);
+      for (const param of retainOnlyParams) {
+        expect(properties[param], `${name}.${param}`).toBeUndefined();
+      }
+    }
+
+    expect(
+      splitTools.map((name) =>
+        ((requireTool(catalog, name).parameters as JsonSchema).required ?? []).slice().sort(),
+      ),
+    ).toEqual([
+      [],
+      ["patch"],
+      [],
+      [],
+      [],
+      [],
+      ["id"],
+      ["name", "sourceQuery"],
+      ["id"],
+      ["id"],
+      ["id"],
+      [],
+      ["query"],
+      ["id"],
+      ["name", "sourceQuery"],
+      ["name"],
+      ["id"],
+      ["id"],
+      [],
+      [],
+    ]);
+  });
+
   it("declares the public tool and command surface in one catalog", () => {
     const catalog = createOperationCatalog({
       getClient: () => client(),
@@ -496,15 +675,31 @@ describe("operation catalog", () => {
     expect(catalog.tools.map((tool) => tool.name)).toEqual([
       "hindsight_recall",
       "hindsight_retain",
-      "hindsight_retain_global",
+      "hindsight_retain_user",
       "hindsight_reflect",
       "hindsight_status",
       "hindsight_seed_git",
       "hindsight_scope",
-      "hindsight_config",
-      "hindsight_bank",
-      "hindsight_mental_model",
-      "hindsight_knowledge",
+      "hindsight_config_get",
+      "hindsight_config_set",
+      "hindsight_bank_list",
+      "hindsight_bank_get",
+      "hindsight_bank_set_mission",
+      "hindsight_mm_list",
+      "hindsight_mm_get",
+      "hindsight_mm_create",
+      "hindsight_mm_update",
+      "hindsight_mm_refresh",
+      "hindsight_mm_delete",
+      "hindsight_kb_tree",
+      "hindsight_kb_search",
+      "hindsight_kb_get",
+      "hindsight_kb_create_page",
+      "hindsight_kb_create_folder",
+      "hindsight_kb_update",
+      "hindsight_kb_delete",
+      "hindsight_kb_seed_taxonomy",
+      "hindsight_kb_export",
       "hindsight_scope_migrate",
     ]);
 

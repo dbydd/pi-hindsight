@@ -554,7 +554,7 @@ describe("extension hooks", () => {
 
     const { default: hindsightExtension } = await import("../extensions/index.js");
     hindsightExtension(pi as any);
-    const result = await tools.hindsight_retain_global.execute(
+    const result = await tools.hindsight_retain_user.execute(
       "tool-call",
       { content: "Kai prefers terse replies", context: "Global user preference" },
       undefined,
@@ -584,14 +584,30 @@ describe("extension hooks", () => {
     hindsightExtension(pi as any);
 
     expect(Object.keys(tools).sort()).toEqual([
-      "hindsight_bank",
-      "hindsight_config",
-      "hindsight_knowledge",
-      "hindsight_mental_model",
+      "hindsight_bank_get",
+      "hindsight_bank_list",
+      "hindsight_bank_set_mission",
+      "hindsight_config_get",
+      "hindsight_config_set",
+      "hindsight_kb_create_folder",
+      "hindsight_kb_create_page",
+      "hindsight_kb_delete",
+      "hindsight_kb_export",
+      "hindsight_kb_get",
+      "hindsight_kb_search",
+      "hindsight_kb_seed_taxonomy",
+      "hindsight_kb_tree",
+      "hindsight_kb_update",
+      "hindsight_mm_create",
+      "hindsight_mm_delete",
+      "hindsight_mm_get",
+      "hindsight_mm_list",
+      "hindsight_mm_refresh",
+      "hindsight_mm_update",
       "hindsight_recall",
       "hindsight_reflect",
       "hindsight_retain",
-      "hindsight_retain_global",
+      "hindsight_retain_user",
       "hindsight_scope",
       "hindsight_scope_migrate",
       "hindsight_seed_git",

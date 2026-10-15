@@ -35,9 +35,9 @@ Authoritative criteria: `docs/mission-and-mental-model-quality.md` (packaged; al
 2. **Inspect** (tools; no dry-run needed for reads):
    - `hindsight_status`
    - `hindsight_scope`
-   - `hindsight_mental_model` action=list (coding bank; life/user if enabled)
-   - `hindsight_mental_model` action=get for broken/suspicious ids
-   - `hindsight_bank` action=get for coding (and life if enabled) — missions
+   - `hindsight_mm_list` (coding bank; life/user if enabled)
+   - `hindsight_mm_get` for broken/suspicious ids
+   - `hindsight_bank_get` for coding (and life if enabled) — missions
 3. **Score against the quality guide** (priority order):
    1. Broken/empty MM content (`#`, empty, Generating…) — prefs MMs may need `fact_types` world+experience+observation, not observation-only
    2. Prefs contradict the user
@@ -50,7 +50,7 @@ Authoritative criteria: `docs/mission-and-mental-model-quality.md` (packaged; al
    - refresh (or clear+refresh if delta-drift)
    - create missing starters for this project
    - mission patch only if extraction is systematically wrong
-5. **Dry-run first** for any mutation (`hindsight_mental_model` / `hindsight_bank` dryRun true). Apply only after user ok (`dryRun: false` or hub).
+5. **Dry-run first** for any mutation (`hindsight_mm_create` / `hindsight_mm_update` / `hindsight_mm_refresh` / `hindsight_mm_delete` / `hindsight_bank_set_mission`, dryRun true). Apply only after user ok (`dryRun: false` or hub).
 6. **Verify** list/get again. Note inject cache may lag (`mentalModels.cacheTtlMs`, often ~5 min) — new session or wait.
 
 ## Output shape

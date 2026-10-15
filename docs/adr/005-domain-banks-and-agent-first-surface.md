@@ -4,6 +4,8 @@
 
 Accepted 2026-07-10 (direction). Implementation is phased via GitHub issues; defaults change only when the corresponding phase lands.
 
+Partially superseded 2026-10-16 (`custom/tools-split`): the "grouped multi-action tools" preference in §6 gets reversed — the four combined `action`-enum tools were split into single-operation tools (`hindsight_config_get`/`hindsight_config_set`, `hindsight_bank_list`/`hindsight_bank_get`/`hindsight_bank_set_mission`, `hindsight_mm_*`, `hindsight_kb_*`), each carrying only its own operation's parameters and no `action` parameter. The other §6 mitigations (descriptions as operating instructions, truthful generated surface reference, no TUI teaching) still hold as written.
+
 Amends:
 
 - ADR-001 (scope: project isolation remains required; **how** isolation is achieved moves from “per-repo bank + path-hash tag” toward “domain bank + stable project tag”)

@@ -7,9 +7,15 @@ import { isMemorySetupComplete, setupRequiredMessage } from "../config/setup-gat
 import { configureMemory, type ProjectConfigPatchInput } from "../config/config-writer.js";
 import { seedKnowledgePages } from "../banks/knowledge-page-seed.js";
 import type { BankConfigEntry, HindsightLikeClient, ResolvedConfig, TagsMatch } from "../types.js";
-import { bankEntryEnabled, codingBankEntry, userBankEntry } from "../config/banks.js";
+import {
+  bankEntryEnabled,
+  bankRetainMode,
+  codingBankEntry,
+  isCodingBankEntry,
+  userBankEntry,
+} from "../config/banks.js";
 
-/** Keys agents may read/patch via hindsight_config (no raw secrets). */
+/** Keys agents may read/patch via hindsight_config_get / hindsight_config_set (no raw secrets). */
 export const AGENT_CONFIG_ALLOWLIST = [
   "setupComplete",
   "scopeMode",
@@ -287,6 +293,34 @@ export function createControlOperations(deps: MemoryOperationsDeps) {
         codingBankId: deps.getProjectBankId(),
         lifeBankId: activeUserEntry(config)?.bankId,
         dualTagWindow: true,
+      };
+    },
+
+    /**
+     * Pi-side view of the configured banks. No Hindsight round-trip: it answers
+     * "which bank ids does this repo have, and what role/access does each carry",
+     * which is what the `bank` parameter of the other tool calls needs.
+     * Server-side facts (existence, stats, config) stay in `bankGet`.
+     */
+    bankList() {
+      const config = deps.getConfig();
+      return {
+        projectBankId: deps.getProjectBankId(),
+        banksFallback: config.banksFallback,
+        banks: config.banks.map((entry) => ({
+          id: entry.id,
+          bankId: entry.bankId ?? null,
+          alias: entry.alias ?? null,
+          role: isCodingBankEntry(config, entry)
+            ? ("coding" as const)
+            : entry.alias === "user"
+              ? ("user" as const)
+              : ("custom" as const),
+          enabled: bankEntryEnabled(entry),
+          access: entry.access ?? "read-write",
+          retainMode: bankRetainMode(config, entry),
+          ...(entry.description ? { description: entry.description } : {}),
+        })),
       };
     },
 

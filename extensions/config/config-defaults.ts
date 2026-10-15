@@ -100,7 +100,7 @@ export const DEFAULT_CONFIG: ResolvedConfig = {
       toolCall: {
         exclude: [
           "hindsight_retain",
-          "hindsight_retain_global",
+          "hindsight_retain_user",
           "hindsight_delete_document",
           "hindsight_retain_receipts",
           "hindsight_route_memory",
@@ -111,7 +111,7 @@ export const DEFAULT_CONFIG: ResolvedConfig = {
       toolResult: {
         exclude: [
           "hindsight_retain",
-          "hindsight_retain_global",
+          "hindsight_retain_user",
           "hindsight_delete_document",
           "hindsight_retain_receipts",
           "hindsight_route_memory",
