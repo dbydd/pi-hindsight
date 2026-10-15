@@ -12,6 +12,7 @@ import {
 } from "../extensions/operations/memory-scope.js";
 import { importPiSession } from "../extensions/imports/import-sessions.js";
 import type { HindsightLikeClient, ResolvedConfig } from "../extensions/types.js";
+import { banks } from "./helpers/bank-config.js";
 
 function noopClient(): HindsightLikeClient {
   return {
@@ -119,7 +120,7 @@ describe("Hindsight best-practice invariants", () => {
     mkdirSync(join(cwd, ".git"));
     const config: ResolvedConfig = {
       ...DEFAULT_CONFIG,
-      banks: { ...DEFAULT_CONFIG.banks, user: { enabled: true, bankId: "pi-global" } },
+      banks: banks({ user: { enabled: true, bankId: "pi-global" } }),
     };
 
     const scopes = selectMemoryScopes(cwd, config);
@@ -251,7 +252,7 @@ describe("Hindsight best-practice invariants", () => {
     const config: ResolvedConfig = {
       ...DEFAULT_CONFIG,
       scope: { ...DEFAULT_CONFIG.scope, includeSharedObservations: true },
-      banks: { ...DEFAULT_CONFIG.banks, user: { enabled: true, bankId: "pi-global" } },
+      banks: banks({ user: { enabled: true, bankId: "pi-global" } }),
     };
 
     const scopes = selectMemoryScopes(cwd, config);
@@ -342,7 +343,7 @@ describe("Hindsight best-practice invariants", () => {
     mkdirSync(join(cwd, ".git"));
     const config: ResolvedConfig = {
       ...DEFAULT_CONFIG,
-      banks: { ...DEFAULT_CONFIG.banks, user: { enabled: true, bankId: "pi-global" } },
+      banks: banks({ user: { enabled: true, bankId: "pi-global" } }),
     };
 
     expect(config.scope.userScopeTags).toEqual(["source:pi", "harness:pi"]);
@@ -367,11 +368,12 @@ describe("Hindsight best-practice invariants", () => {
     const config: ResolvedConfig = {
       ...DEFAULT_CONFIG,
       scope: { ...DEFAULT_CONFIG.scope, userScopeTags: [] },
-      banks: { ...DEFAULT_CONFIG.banks, user: { enabled: true, bankId: "pi-global" } },
+      banks: banks({ user: { enabled: true, bankId: "pi-global" } }),
     };
 
     expect(scopeTagsForBank(cwd, config, "pi-global")).toEqual([]);
     expect(selectMemoryScopes(cwd, config).find((scope) => scope.kind === "global")).toEqual({
+      entryId: "user",
       kind: "global",
       bankId: "pi-global",
       tagGroups: [],

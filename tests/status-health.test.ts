@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { DEFAULT_CONFIG } from "../extensions/config/config.js";
+import { banks } from "./helpers/bank-config.js";
 import { collectStatusHealthFacts } from "../extensions/utils/status-health.js";
 import type { HindsightLikeClient } from "../extensions/types.js";
 
@@ -41,10 +42,7 @@ describe("status health", () => {
       client,
       config: {
         ...DEFAULT_CONFIG,
-        banks: {
-          ...DEFAULT_CONFIG.banks,
-          user: { enabled: true, bankId: "global-bank" },
-        },
+        banks: banks({ user: { enabled: true, bankId: "global-bank" } }),
       },
       projectBankId: "project-bank",
     });

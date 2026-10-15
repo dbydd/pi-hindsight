@@ -19,12 +19,14 @@ To pin the Project Bank ID:
   "hindsight": {
     "baseUrl": "http://localhost:8888"
   },
-  "banks": {
-    "project": {
+  "banks": [
+    {
+      "id": "coding",
+      "alias": "project",
       "derive": "manual",
       "bankId": "pi-project-my-repo"
     }
-  }
+  ]
 }
 ```
 

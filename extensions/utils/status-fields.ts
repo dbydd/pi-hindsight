@@ -2,6 +2,12 @@ import { isMemorySetupComplete } from "../config/setup-gate.js";
 import { DEFAULT_CONFIG } from "../config/config-defaults.js";
 import { formatProjectIdentityForStatus, resolveProjectIdentity } from "../banks/banking.js";
 import type { ResolvedConfig } from "../types.js";
+import {
+  bankEntryEnabled,
+  bankMissionSettings,
+  codingBankEntry,
+  userBankEntry,
+} from "../config/banks.js";
 
 export type StatusFieldTone = "default" | "custom" | "warn" | "info";
 
@@ -89,28 +95,25 @@ export function buildStatusFields(config: ResolvedConfig, ctx: StatusFieldContex
     tone: project.basis === "pin" ? "custom" : "default",
   });
 
-  const codingEnabled = config.banks.project.enabled;
+  const coding = codingBankEntry(config);
+  const user = userBankEntry(config);
+  const codingEnabled = Boolean(coding && bankEntryEnabled(coding));
+  const userEnabled = Boolean(user && bankEntryEnabled(user));
   fields.push({
     key: "codingBank",
     label: "Coding bank",
     value: codingEnabled
-      ? `${ctx.projectBankId}${config.banks.project.bankId ? "" : " (path-derived)"}`
+      ? `${ctx.projectBankId}${coding?.bankId ? "" : " (path-derived)"}`
       : "disabled",
-    tone: !codingEnabled
-      ? "info"
-      : config.banks.project.bankId
-        ? "custom"
-        : setupOk
-          ? "warn"
-          : "info",
+    tone: !codingEnabled ? "info" : coding?.bankId ? "custom" : setupOk ? "warn" : "info",
   });
 
-  const lifeId = config.banks.user.bankId;
+  const lifeId = user?.bankId;
   fields.push({
     key: "lifeBank",
     label: "Life bank",
-    value: config.banks.user.enabled ? (lifeId ?? "(no bankId)") : "disabled",
-    tone: !config.banks.user.enabled ? "info" : lifeId ? "custom" : "warn",
+    value: userEnabled ? (lifeId ?? "(no bankId)") : "disabled",
+    tone: !userEnabled ? "info" : lifeId ? "custom" : "warn",
   });
 
   fields.push({

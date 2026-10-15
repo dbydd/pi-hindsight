@@ -66,7 +66,7 @@ Tags are soft scope inside a bank. Pi and other clients should stay interoperabl
 
 ## Checklist for a second client
 
-1. Create or pick bank ids that match Pi config (`banks.project.bankId` / life bank).
+1. Create or pick bank ids that match Pi config (the coding entry's `bankId` / life bank).
 2. Point the client MCP URL at `/mcp/<thatBankId>/`.
 3. Set the client’s mission text to match the bank mission (engineering vs personal).
 4. Configure the client to tag retains with `source:<name>` and, for coding, `project:<id>` when applicable.

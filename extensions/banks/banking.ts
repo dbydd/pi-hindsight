@@ -4,6 +4,7 @@ import { existsSync, realpathSync } from "node:fs";
 import { dirname } from "node:path";
 import { execFileSync } from "node:child_process";
 import type { BankSelection, ResolvedConfig } from "../types.js";
+import { codingBankEntry, userBankEntry } from "../config/banks.js";
 
 export type ProjectIdBasis = "pin" | "remote" | "basename";
 
@@ -173,17 +174,18 @@ export function folderBankId(path: string): string {
 
 /**
  * Resolve the coding-role bank id.
- * - Explicit banks.project.bankId always wins (domain coding bank or isolated override).
+ * - Explicit coding-role bankId always wins (domain coding bank or isolated override).
  * - isolated-bank mode (or legacy path when no bankId): path/cwd-derived bank.
  * - domain-tagged without bankId: still path-derived for upgrade safety; setup should set bankId.
  * - derive "basename": git-root folder name so Pi shares banks with Claude/Grok.
  */
 export function deriveProjectBankId(cwd: string, config: ResolvedConfig): string {
-  if (config.banks.project.bankId) return config.banks.project.bankId;
+  const coding = codingBankEntry(config);
+  if (coding?.bankId) return coding.bankId;
   // Domain-tagged + explicit bankId is the preferred shared coding bank path.
   // Without bankId, keep path-derived identity so upgrades do not silently merge banks.
-  const basis = config.banks.project.derive === "cwd" ? resolve(cwd) : findRepoRoot(cwd);
-  if (config.banks.project.derive === "basename") return folderBankId(basis);
+  const basis = coding?.derive === "cwd" ? resolve(cwd) : findRepoRoot(cwd);
+  if (coding?.derive === "basename") return folderBankId(basis);
   return `pi-project-${slug(basename(basis))}-${hash(basis)}`;
 }
 
@@ -198,7 +200,8 @@ export function deriveCodingBankId(cwd: string, config: ResolvedConfig): string 
 }
 
 export function selectBanks(cwd: string, config: ResolvedConfig): BankSelection {
-  const globalBankId = config.banks.user.enabled ? config.banks.user.bankId : undefined;
+  const user = userBankEntry(config);
+  const globalBankId = user && user.enabled !== false ? user.bankId : undefined;
   return {
     projectBankId: deriveProjectBankId(cwd, config),
     ...(globalBankId ? { globalBankId } : {}),

@@ -4,6 +4,8 @@ import { parse, printParseErrorCode, type ParseError } from "jsonc-parser";
 import type { ResolvedConfig } from "../types.js";
 import { DEFAULT_CONFIG } from "./config-defaults.js";
 import { envBool, isRecord, merge, normalizeConfig, validEnvVarName } from "./config-normalize.js";
+import { mergeBankEntries } from "./banks.js";
+import type { BankConfigEntry } from "../types.js";
 
 export { DEFAULT_CONFIG } from "./config-defaults.js";
 export { normalizeConfig, validEnvVarName } from "./config-normalize.js";
@@ -115,52 +117,94 @@ export function migrateUserMemoryConfigFiles(
   return results;
 }
 
+/** Raw merged layer view, used only for "was this recall field configured?" checks. */
+function mergedRawLayers(homeConfig: unknown, projectConfig: unknown): Record<string, unknown> {
+  return merge(merge({} as Record<string, unknown>, homeConfig), projectConfig);
+}
+
+/**
+ * Last matching entry id. Later config layers append to the tail, so the last match is
+ * the most specific one. A reverse scan keeps this on the es2022 lib baseline.
+ */
+function lastMatchingId(
+  entries: BankConfigEntry[],
+  match: (entry: BankConfigEntry) => boolean,
+): string | undefined {
+  for (let index = entries.length - 1; index >= 0; index -= 1) {
+    const entry = entries[index];
+    if (entry && match(entry)) return entry.id;
+  }
+  return undefined;
+}
+
+/**
+ * Coding-role entry an env override should target. Later layers win so a project-layer
+ * entry beats the default placeholder; falls back to the default coding id otherwise.
+ */
+function codingBankEntryId(banks: unknown): string {
+  const id = lastMatchingId(
+    mergeBankEntries(banks, []),
+    (entry) => entry.alias === "project" || entry.id === "project",
+  );
+  return id ?? "coding";
+}
+
+/** User-role entry an env override should target. */
+function userBankEntryId(banks: unknown): string {
+  const id = lastMatchingId(
+    mergeBankEntries(banks, []),
+    (entry) => entry.alias === "user" || entry.id === "user",
+  );
+  return id ?? "life";
+}
+
 export function resolveConfig(cwd: string, env: NodeJS.ProcessEnv = process.env): ResolvedConfig {
   migrateUserMemoryConfigFiles(cwd, env);
-  let rawConfig: Record<string, unknown> = {};
-  let config = DEFAULT_CONFIG;
+  // `banks` is a list, so the recursive deep merge below would replace it wholesale.
+  // Banks merge by `id` across layers; `banksFallback` is replaced by the last layer.
+  let banks: unknown = DEFAULT_CONFIG.banks;
+  let banksFallback: unknown;
   const home = env.HOME;
   const homeConfig = home ? readConfigFile(join(home, ".pi", "agent", "hindsight")) : undefined;
-  rawConfig = merge(rawConfig, homeConfig);
-  config = merge(config, homeConfig);
   const projectConfig = readConfigFile(join(cwd, ".pi", "hindsight"));
-  rawConfig = merge(rawConfig, projectConfig);
+  let config = merge(DEFAULT_CONFIG, homeConfig);
   config = merge(config, projectConfig);
+  for (const layer of [homeConfig, projectConfig]) {
+    if (!isRecord(layer)) continue;
+    if ("banks" in layer) banks = mergeBankEntries(banks, layer.banks);
+    if ("banksFallback" in layer) banksFallback = layer.banksFallback;
+  }
 
   const enabled = envBool(env, "PI_HINDSIGHT_ENABLED");
-  if (enabled !== undefined) {
-    rawConfig = merge(rawConfig, { enabled });
-    config = merge(config, { enabled });
-  }
+  if (enabled !== undefined) config = merge(config, { enabled });
   if (env.HINDSIGHT_BASE_URL) {
-    rawConfig = merge(rawConfig, { hindsight: { baseUrl: env.HINDSIGHT_BASE_URL } });
     config = merge(config, { hindsight: { baseUrl: env.HINDSIGHT_BASE_URL } });
   }
   if (env.HINDSIGHT_API_KEY_REF && validEnvVarName(env.HINDSIGHT_API_KEY_REF)) {
     const ref = { source: "env", name: env.HINDSIGHT_API_KEY_REF };
-    rawConfig = merge(rawConfig, { hindsight: { apiKey: ref } });
     config = merge(config, { hindsight: { apiKey: ref } });
   }
   // Prefer HINDSIGHT_API_TOKEN; keep HINDSIGHT_API_KEY as legacy fallback.
   const apiKeyFromEnv = env.HINDSIGHT_API_TOKEN?.trim() || env.HINDSIGHT_API_KEY?.trim();
   if (apiKeyFromEnv) {
-    rawConfig = merge(rawConfig, { hindsight: { apiKey: apiKeyFromEnv } });
     config = merge(config, { hindsight: { apiKey: apiKeyFromEnv } });
   }
+  // Env bank overrides target the aliased coding/user entry, whichever id it carries.
   if (env.PI_HINDSIGHT_PROJECT_BANK_ID) {
-    const patch = {
-      banks: { project: { bankId: env.PI_HINDSIGHT_PROJECT_BANK_ID, derive: "manual" } },
-    };
-    rawConfig = merge(rawConfig, patch);
-    config = merge(config, patch);
+    banks = mergeBankEntries(banks, [
+      {
+        id: codingBankEntryId(banks),
+        alias: "project",
+        bankId: env.PI_HINDSIGHT_PROJECT_BANK_ID,
+        derive: "manual",
+      },
+    ]);
   }
   const userBankId = env.PI_HINDSIGHT_USER_BANK_ID || env.PI_HINDSIGHT_GLOBAL_BANK_ID;
   if (userBankId) {
-    const patch = {
-      banks: { user: { enabled: true, bankId: userBankId } },
-    };
-    rawConfig = merge(rawConfig, patch);
-    config = merge(config, patch);
+    banks = mergeBankEntries(banks, [
+      { id: userBankEntryId(banks), alias: "user", enabled: true, bankId: userBankId },
+    ]);
   }
   const minScores: Record<string, number> = {};
   const semanticFloor =
@@ -173,10 +217,8 @@ export function resolveConfig(cwd: string, env: NodeJS.ProcessEnv = process.env)
       ? Number.NaN
       : Number(env.PI_HINDSIGHT_MIN_RERANKER);
   if (Number.isFinite(rerankerFloor)) minScores.reranker = rerankerFloor;
-  if (Object.keys(minScores).length) {
-    const patch = { recall: { minScores } };
-    rawConfig = merge(rawConfig, patch);
-    config = merge(config, patch);
-  }
-  return normalizeConfig(config, rawConfig, env);
+  if (Object.keys(minScores).length) config = merge(config, { recall: { minScores } });
+  config = { ...config, banks: mergeBankEntries(banks, []) };
+  if (banksFallback !== undefined) config = { ...config, banksFallback: banksFallback as string[] };
+  return normalizeConfig(config, mergedRawLayers(homeConfig, projectConfig), env);
 }

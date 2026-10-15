@@ -18,7 +18,7 @@ describe("config writer", () => {
   it("builds project bank override patch", () => {
     expect(buildProjectConfigPatch({ projectBankId: "bank", baseUrl: "http://h" })).toEqual({
       hindsight: { baseUrl: "http://h" },
-      banks: { project: { enabled: true, derive: "manual", bankId: "bank" } },
+      banks: [{ id: "coding", alias: "project", enabled: true, derive: "manual", bankId: "bank" }],
     });
   });
 
@@ -33,30 +33,44 @@ describe("config writer", () => {
         globalObservationsMission: "Global observations",
       }),
     ).toEqual({
-      banks: {
-        project: {
-          retainMission: "Project retain",
-          reflectMission: "Project reflect",
-          observationsMission: "Project observations",
+      banks: [
+        {
+          id: "coding",
+          alias: "project",
+          mission: {
+            retain: "Project retain",
+            reflect: "Project reflect",
+            observations: "Project observations",
+          },
         },
-        user: {
-          retainMission: "Global retain",
-          reflectMission: "Global reflect",
-          observationsMission: "Global observations",
+        {
+          id: "life",
+          alias: "user",
+          mission: {
+            retain: "Global retain",
+            reflect: "Global reflect",
+            observations: "Global observations",
+          },
         },
-      },
+      ],
     });
   });
 
   it("builds memory profile patches", () => {
     expect(buildProjectConfigPatch({ memoryProfile: "project-only" })).toEqual({
-      banks: { project: { enabled: true }, user: { enabled: false } },
+      banks: [
+        { id: "coding", alias: "project", enabled: true },
+        { id: "life", alias: "user", enabled: false },
+      ],
       userRetain: { mode: "explicit-only" },
       recall: { enabled: true },
       retain: { enabled: true },
     });
     expect(buildProjectConfigPatch({ memoryProfile: "project+global" })).toEqual({
-      banks: { project: { enabled: true }, user: { enabled: true } },
+      banks: [
+        { id: "coding", alias: "project", enabled: true },
+        { id: "life", alias: "user", enabled: true },
+      ],
       userRetain: { mode: "explicit-only" },
       recall: { enabled: true },
       retain: { enabled: true },
@@ -68,7 +82,10 @@ describe("config writer", () => {
         globalBankId: "shared",
       }),
     ).toEqual({
-      banks: { project: { enabled: false }, user: { enabled: true, bankId: "shared" } },
+      banks: [
+        { id: "coding", alias: "project", enabled: false },
+        { id: "life", alias: "user", enabled: true, bankId: "shared" },
+      ],
       userRetain: { mode: "explicit-only" },
       recall: { enabled: true },
       retain: { enabled: true },
@@ -185,12 +202,12 @@ describe("config writer", () => {
   it("deep merges without deleting existing config", () => {
     expect(
       deepMergeConfig(
-        { recall: { maxTokens: 100 }, banks: { global: { enabled: false } } },
-        { banks: { project: { bankId: "b" } } },
+        { recall: { maxTokens: 100 }, banks: [{ id: "life", alias: "user", enabled: false }] },
+        { banks: [{ id: "coding", bankId: "b" }] },
       ),
     ).toEqual({
       recall: { maxTokens: 100 },
-      banks: { global: { enabled: false }, project: { bankId: "b" } },
+      banks: [{ id: "coding", bankId: "b" }],
     });
   });
 
@@ -202,7 +219,11 @@ describe("config writer", () => {
     );
     expect(result.path).toBe(projectConfigPath(cwd));
     const written = JSON.parse(readFileSync(result.path, "utf8")) as Record<string, unknown>;
-    expect(written).toMatchObject({ banks: { project: { bankId: "bank", derive: "manual" } } });
+    expect(written.banks).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ id: "coding", bankId: "bank", derive: "manual" }),
+      ]),
+    );
   });
 
   it("writes global config without touching project config", async () => {
@@ -348,8 +369,11 @@ describe("config writer", () => {
       buildProjectConfigDeletes({ resetDefaults: ["banks.project.bankId", "recall.budget"] }),
     );
     const written = JSON.parse(readFileSync(projectConfigPath(cwd), "utf8")) as Record<string, any>;
-    expect(written.banks.project).not.toHaveProperty("bankId");
-    expect(written.banks.project).not.toHaveProperty("derive");
+    const codingEntry = (written.banks as Array<Record<string, unknown>>).find(
+      (entry) => entry.id === "coding",
+    );
+    expect(codingEntry).not.toHaveProperty("bankId");
+    expect(codingEntry).not.toHaveProperty("derive");
     expect(written.recall).not.toHaveProperty("budget");
   });
 });

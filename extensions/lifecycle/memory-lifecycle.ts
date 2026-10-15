@@ -9,6 +9,13 @@ import { resolveConfig } from "../config/config.js";
 import { consumeLastConfigMigrationResults } from "../config/config.js";
 import { isMemorySetupComplete, setupRequiredMessage } from "../config/setup-gate.js";
 import { deriveProjectBankId } from "../banks/banking.js";
+import {
+  bankEntryEnabled,
+  bankMissionSettings,
+  canWriteBank,
+  codingBankEntry,
+  userBankEntry,
+} from "../config/banks.js";
 import { createHindsightClient } from "../client/client.js";
 import { ensureGlobalBank, ensureProjectBank } from "../banks/bank-operations.js";
 import { flushRetainQueue, retainQueuePath } from "../queue/queue.js";
@@ -187,10 +194,11 @@ export function createMemoryLifecycle(
       }
       const failures: InitHealthFailure[] = [];
       let ensureSucceeded = false;
-      if (config.banks.project.enabled) {
+      const coding = codingBankEntry(config);
+      if (coding && bankEntryEnabled(coding)) {
         try {
           await ensureProjectBank(client, projectBankId, {
-            ...config.banks.project,
+            ...bankMissionSettings(coding),
             enableObservations: config.observations.enabled,
           });
           ensureSucceeded = true;
@@ -200,10 +208,11 @@ export function createMemoryLifecycle(
           notify(runtime, `Hindsight project bank ensure failed: ${redactError(error)}`, "warning");
         }
       }
-      if (config.banks.user.enabled && config.banks.user.bankId) {
+      const user = userBankEntry(config);
+      if (user && bankEntryEnabled(user) && user.bankId) {
         try {
-          await ensureGlobalBank(client, config.banks.user.bankId, {
-            ...config.banks.user,
+          await ensureGlobalBank(client, user.bankId, {
+            ...bankMissionSettings(user),
             enableObservations: config.observations.enabled,
             agentUse: config.agentUse,
           });
@@ -251,8 +260,18 @@ export function createMemoryLifecycle(
       event: AgentEndEvent,
       ctx: RuntimeCtx,
     ): Promise<{ queued: boolean; sent: number; remaining: number }> {
-      const canRetainProject = config.banks.project.enabled;
-      const canRetainUser = config.banks.user.enabled && Boolean(config.banks.user.bankId);
+      const canRetainProject = Boolean(
+        codingBankEntry(config) &&
+        bankEntryEnabled(codingBankEntry(config)!) &&
+        canWriteBank(codingBankEntry(config)!),
+      );
+      const userForRetain = userBankEntry(config);
+      const canRetainUser = Boolean(
+        userForRetain &&
+        bankEntryEnabled(userForRetain) &&
+        canWriteBank(userForRetain) &&
+        userForRetain.bankId,
+      );
       if (!config.enabled || !config.retain.enabled || (!canRetainProject && !canRetainUser))
         return { queued: false, sent: 0, remaining: 0 };
       const runtime = snapshotRuntime(ctx);

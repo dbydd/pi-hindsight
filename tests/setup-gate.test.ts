@@ -9,18 +9,14 @@ import {
   setupRequiredMessage,
 } from "../extensions/config/setup-gate.js";
 import type { ResolvedConfig } from "../extensions/types.js";
+import { banks, type BanksPatch } from "./helpers/bank-config.js";
 
-function config(patch: Partial<ResolvedConfig> = {}): ResolvedConfig {
+function config(patch: BanksPatch = {}): ResolvedConfig {
   return {
     ...DEFAULT_CONFIG,
     ...patch,
     scope: { ...DEFAULT_CONFIG.scope, ...(patch as { scope?: object }).scope },
-    banks: {
-      ...DEFAULT_CONFIG.banks,
-      ...(patch.banks ?? {}),
-      project: { ...DEFAULT_CONFIG.banks.project, ...(patch.banks?.project ?? {}) },
-      user: { ...DEFAULT_CONFIG.banks.user, ...(patch.banks?.user ?? {}) },
-    },
+    banks: banks(patch.banks),
   } as ResolvedConfig;
 }
 
@@ -60,10 +56,7 @@ describe("setup gate", () => {
       isMemorySetupComplete(
         config({
           setupComplete: true,
-          banks: {
-            ...DEFAULT_CONFIG.banks,
-            project: { enabled: true, derive: "basename" },
-          },
+          banks: banks({ project: { enabled: true, derive: "basename" } }),
         }),
         cwd,
       ),
@@ -71,10 +64,7 @@ describe("setup gate", () => {
     expect(
       requiresExplicitCodingBankId(
         config({
-          banks: {
-            ...DEFAULT_CONFIG.banks,
-            project: { enabled: true, derive: "basename" },
-          },
+          banks: banks({ project: { enabled: true, derive: "basename" } }),
         }),
       ),
     ).toBe(true);
@@ -86,10 +76,7 @@ describe("setup gate", () => {
       isMemorySetupComplete(
         config({
           setupComplete: true,
-          banks: {
-            ...DEFAULT_CONFIG.banks,
-            project: { enabled: true, bankId: "my-bank", derive: "manual" },
-          },
+          banks: banks({ project: { enabled: true, bankId: "my-bank", derive: "manual" } }),
         }),
         cwd,
       ),
@@ -101,10 +88,7 @@ describe("setup gate", () => {
     expect(
       isMemorySetupComplete(
         config({
-          banks: {
-            ...DEFAULT_CONFIG.banks,
-            project: { enabled: true, bankId: "my-bank", derive: "manual" },
-          },
+          banks: banks({ project: { enabled: true, bankId: "my-bank", derive: "manual" } }),
         }),
         cwd,
       ),
@@ -116,12 +100,10 @@ describe("setup gate", () => {
     expect(
       isMemorySetupComplete(
         config({
-          banks: {
-            ...DEFAULT_CONFIG.banks,
+          banks: banks({
             project: { enabled: false, derive: "repo" },
             user: { enabled: true, bankId: "life-bank" },
-            global: { enabled: true, bankId: "life-bank" },
-          },
+          }),
         }),
         cwd,
       ),

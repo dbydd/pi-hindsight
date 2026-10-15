@@ -6,11 +6,11 @@ Published docs: <https://luxus.github.io/pi-hindsight/guides/upgrading-to-domain
 
 ## What changed
 
-| Before (path banks)                         | After (domain banks)                                                          |
-| ------------------------------------------- | ----------------------------------------------------------------------------- |
-| Bank id derived from absolute path          | Explicit coding bank id for shared domain mode                                |
-| Isolation mostly by separate banks          | Isolation by `project:<id>` tags (plus dual-tag legacy `repo:`)               |
-| Auto memory could run on path-derived banks | **Domain-tagged** auto memory needs `banks.project.bankId` before network I/O |
+| Before (path banks)                         | After (domain banks)                                                                    |
+| ------------------------------------------- | --------------------------------------------------------------------------------------- |
+| Bank id derived from absolute path          | Explicit coding bank id for shared domain mode                                          |
+| Isolation mostly by separate banks          | Isolation by `project:<id>` tags (plus dual-tag legacy `repo:`)                         |
+| Auto memory could run on path-derived banks | **Domain-tagged** auto memory needs an explicit coding bank `bankId` before network I/O |
 
 You do **not** need a bulk tag rewrite to keep working. Soft update is dual-tag + choose a bank model.
 
@@ -29,7 +29,7 @@ Recall matches **either** tag, so older memories still surface while new ones ge
 
 Practical steps:
 
-1. Open `/hindsight` → guided setup (`g`) **or** set `banks.project.bankId` / `PI_HINDSIGHT_PROJECT_BANK_ID`.
+1. Open `/hindsight` → guided setup (`g`) **or** set the coding entry's `bankId` in `banks` / `PI_HINDSIGHT_PROJECT_BANK_ID`.
 2. Prefer `scope.projectIdStrategy: "remote"` (default) or pin `scope.projectId` for weak basename-only repos.
 3. Optional: run `hindsight_scope_migrate` (dry-run only) for a local plan/receipt. It never rewrites Hindsight tags.
 
@@ -45,11 +45,11 @@ Practical steps:
 ```jsonc
 {
   "scope": { "mode": "isolated-bank" },
-  "banks": { "project": { "enabled": true } },
+  "banks": [{ "id": "coding", "alias": "project", "enabled": true }],
 }
 ```
 
-Path-derived bank ids remain valid. Pin `banks.project.bankId` if you want a fixed hard-wall bank.
+Path-derived bank ids remain valid. Pin the coding entry's `bankId` if you want a fixed hard-wall bank.
 
 ### 4. Freeze on a previous package version
 
@@ -57,7 +57,7 @@ Pin the previous published release of `@luxusai/pi-hindsight` and read the [chan
 
 ## Setup gate
 
-- **Domain-tagged** + project bank enabled → requires explicit `banks.project.bankId` (or env). Soft signals alone do **not** unlock auto memory.
+- **Domain-tagged** + coding bank enabled → requires an explicit coding `bankId` (or env). Soft signals alone do **not** unlock auto memory.
 - **Isolated-bank** → may use path-derived banks once config/runtime signals show an existing install, or after guided setup.
 
 ## Related

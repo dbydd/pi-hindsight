@@ -5,10 +5,10 @@ import {
   type ResolvedConfig,
 } from "../types.js";
 import { DEFAULT_CONFIG } from "./config-defaults.js";
+import { isRecord } from "./is-record.js";
+import { normalizeBankEntries, normalizeBanksFallback } from "./banks.js";
 
-export function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
+export { isRecord };
 
 export function merge<T>(base: T, patch: unknown): T {
   if (!isRecord(base) || !isRecord(patch)) return (patch ?? base) as T;
@@ -167,26 +167,6 @@ function hasConfiguredRecallField(rawConfig: unknown, field: string): boolean {
   return isRecord(rawConfig) && isRecord(rawConfig.recall) && field in rawConfig.recall;
 }
 
-function missionFields(bankConfig: unknown) {
-  if (!isRecord(bankConfig)) return {};
-  return {
-    ...(typeof bankConfig.retainMission === "string"
-      ? { retainMission: bankConfig.retainMission }
-      : {}),
-    ...(typeof bankConfig.reflectMission === "string"
-      ? { reflectMission: bankConfig.reflectMission }
-      : {}),
-    ...(typeof bankConfig.observationsMission === "string"
-      ? { observationsMission: bankConfig.observationsMission }
-      : {}),
-    ...(typeof bankConfig.retainStructuredChunkSize === "number" &&
-    Number.isInteger(bankConfig.retainStructuredChunkSize) &&
-    bankConfig.retainStructuredChunkSize > 0
-      ? { retainStructuredChunkSize: bankConfig.retainStructuredChunkSize }
-      : {}),
-  };
-}
-
 export function normalizeConfig(
   config: ResolvedConfig,
   rawConfig?: unknown,
@@ -199,33 +179,9 @@ export function normalizeConfig(
   const apiKey =
     directApiKey(config.hindsight?.apiKey, DEFAULT_CONFIG.hindsight.apiKey) ??
     resolveApiKeyRef(apiKeyRef, env);
-  // banks.coding → project; banks.life → user (ADR-005 role names).
-  const banksRaw = config.banks as
-    | {
-        project?: unknown;
-        coding?: unknown;
-        user?: unknown;
-        global?: unknown;
-        life?: unknown;
-      }
-    | undefined;
-  if (banksRaw && isRecord(banksRaw.coding) && !isRecord(banksRaw.project)) {
-    banksRaw.project = banksRaw.coding;
-  } else if (banksRaw && isRecord(banksRaw.coding) && isRecord(banksRaw.project)) {
-    banksRaw.project = { ...banksRaw.coding, ...banksRaw.project };
-  }
-  if (banksRaw && isRecord(banksRaw.life)) {
-    // life overlays user so alias fields win over defaults merged earlier.
-    if (isRecord(banksRaw.user)) banksRaw.user = { ...banksRaw.user, ...banksRaw.life };
-    else banksRaw.user = banksRaw.life;
-  }
-  const projectBankId = optionalString(
-    config.banks?.project?.bankId,
-    DEFAULT_CONFIG.banks.project.bankId,
-  );
-  const userBankConfig = config.banks?.user ?? config.banks?.global;
-  const defaultUserBankConfig = DEFAULT_CONFIG.banks.user;
-  const globalBankId = optionalString(userBankConfig?.bankId, defaultUserBankConfig.bankId);
+  // `banks` may be the new array or the legacy three-slot object; both normalize here.
+  const banks = normalizeBankEntries(config.banks, DEFAULT_CONFIG.banks);
+  const banksFallback = normalizeBanksFallback(config.banksFallback, banks);
   const minScores = scoreFloors(config.recall?.minScores);
   const scopeRaw = (
     config as {
@@ -294,28 +250,8 @@ export function normalizeConfig(
         DEFAULT_CONFIG.mentalModels.cacheTtlMs,
       ),
     },
-    banks: {
-      project: {
-        enabled: bool(config.banks?.project?.enabled, DEFAULT_CONFIG.banks.project.enabled),
-        ...(projectBankId ? { bankId: projectBankId } : {}),
-        derive: enumValue(
-          config.banks?.project?.derive,
-          ["repo", "cwd", "manual", "basename"],
-          DEFAULT_CONFIG.banks.project.derive,
-        ),
-        ...missionFields(config.banks?.project),
-      },
-      user: {
-        enabled: bool(userBankConfig?.enabled, defaultUserBankConfig.enabled),
-        ...(globalBankId ? { bankId: globalBankId } : {}),
-        ...missionFields(userBankConfig),
-      },
-      global: {
-        enabled: bool(userBankConfig?.enabled, defaultUserBankConfig.enabled),
-        ...(globalBankId ? { bankId: globalBankId } : {}),
-        ...missionFields(userBankConfig),
-      },
-    },
+    banks,
+    banksFallback,
     observations: {
       enabled: bool(config.observations?.enabled, DEFAULT_CONFIG.observations.enabled),
       scopes: stringMatrix(config.observations?.scopes, DEFAULT_CONFIG.observations.scopes),

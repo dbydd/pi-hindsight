@@ -53,10 +53,10 @@ When dual-tag can end: every active project memory you care about carries `proje
 
 | Mode                          | Bank                                           | Tags                          |
 | ----------------------------- | ---------------------------------------------- | ----------------------------- |
-| **`domain-tagged`** (default) | Shared coding bank (`banks.project.bankId`)    | `project:<id>` isolates repos |
+| **`domain-tagged`** (default) | Shared coding bank (coding entry `bankId`)     | `project:<id>` isolates repos |
 | **`isolated-bank`**           | Hard wall per repo (path-derived if no bankId) | project tags still written    |
 
-When `banks.project.bankId` is unset, `banks.project.derive` picks the isolated bank name:
+When the coding entry's `bankId` is unset, its `derive` picks the isolated bank name:
 
 | `derive`                 | Bank id                                    |
 | ------------------------ | ------------------------------------------ |
@@ -66,7 +66,7 @@ When `banks.project.bankId` is unset, `banks.project.derive` picks the isolated 
 
 `basename` is opt-in interoperability with clients that already use folder-named banks (for example Claude Code / Grok `dynamicBankId` + project granularity). It is not the recommended Coding profile. Two different repos with the same folder name share that bank. `scope.projectIdStrategy: "basename"` still only sets the `project:<id>` tag; isolated bank naming is `banks.project.derive`.
 
-`banks.coding` aliases `banks.project`. `banks.life` aliases `banks.user`.
+In the `banks` array, the reserved aliases are `alias: "project"` (coding) and `alias: "user"` (life). In legacy object-shaped configs, `banks.coding` aliases `banks.project` and `banks.life` aliases `banks.user`.
 
 ## Config
 
@@ -75,10 +75,10 @@ When `banks.project.bankId` is unset, `banks.project.derive` picks the isolated 
 {
   "setupComplete": true,
   "scope": { "mode": "domain-tagged", "projectIdStrategy": "remote" },
-  "banks": {
-    "project": { "enabled": true, "bankId": "kai-coding", "derive": "manual" },
-    "user": { "enabled": true, "bankId": "kai-life" }
-  }
+  "banks": [
+    { "id": "coding", "alias": "project", "enabled": true, "bankId": "kai-coding", "derive": "manual" },
+    { "id": "life", "alias": "user", "enabled": true, "bankId": "kai-life" }
+  ]
 }
 
 // .pi/hindsight.json

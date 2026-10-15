@@ -1,5 +1,11 @@
 import type { ResolvedConfig } from "../types.js";
 import {
+  bankEntryEnabled,
+  bankMissionSettings,
+  codingBankEntry,
+  userBankEntry,
+} from "../config/banks.js";
+import {
   PI_HINDSIGHT_CLIENT_PACKAGE,
   PI_HINDSIGHT_CLIENT_RANGE,
   PI_HINDSIGHT_SUPPORTED_NODE,
@@ -54,27 +60,34 @@ export interface DebugReportArgs {
 }
 
 export function bankSelectionMessage(projectBankId: string, config: ResolvedConfig): string {
-  if (!config.banks.project.enabled) {
-    return config.banks.user.enabled && config.banks.user.bankId
-      ? `Hindsight life/user bank: ${config.banks.user.bankId}`
+  const coding = codingBankEntry(config);
+  const user = userBankEntry(config);
+  if (!coding || !bankEntryEnabled(coding)) {
+    return user && bankEntryEnabled(user) && user.bankId
+      ? `Hindsight life/user bank: ${user.bankId}`
       : "Hindsight coding bank disabled and no life/user bank configured.";
   }
   const mode = config.scope.mode;
-  if (config.banks.project.bankId) {
+  if (coding.bankId) {
     return mode === "isolated-bank"
       ? `Hindsight isolated bank: ${projectBankId}`
       : `Hindsight coding bank (domain-tagged): ${projectBankId}`;
   }
+  // Name both forms: the array entry field is current, the legacy slot key still resolves.
   return mode === "isolated-bank"
-    ? `Hindsight isolated bank auto-selected: ${projectBankId}. Set banks.project.bankId to pin.`
+    ? `Hindsight isolated bank auto-selected: ${projectBankId}. Set banks.project.bankId (or the coding bank entry's bankId) to pin.`
     : `Hindsight coding bank path-derived (set banks.project.bankId for a shared domain bank): ${projectBankId}`;
 }
 
 export function memoryProfile(
   config: ResolvedConfig,
 ): "project-only" | "project+global" | "global-only" | "none" {
-  if (!config.banks.project.enabled) return config.banks.user.enabled ? "global-only" : "none";
-  if (config.banks.user.enabled) return "project+global";
+  const coding = codingBankEntry(config);
+  const user = userBankEntry(config);
+  const codingEnabled = Boolean(coding && bankEntryEnabled(coding));
+  const userEnabled = Boolean(user && bankEntryEnabled(user));
+  if (!codingEnabled) return userEnabled ? "global-only" : "none";
+  if (userEnabled) return "project+global";
   return "project-only";
 }
 
@@ -119,6 +132,10 @@ export function observationScopeDiagnostics(args: {
 }
 
 export function formatDebugReport(args: DebugReportArgs): string {
+  const codingEntry = codingBankEntry(args.config);
+  const userEntry = userBankEntry(args.config);
+  const codingEnabled = Boolean(codingEntry && bankEntryEnabled(codingEntry));
+  const userEnabled = Boolean(userEntry && bankEntryEnabled(userEntry));
   const sessionId = stableSessionId(args.sessionFile, args.cwd);
   const projectIdentity = resolveProjectIdentity(args.cwd, args.config);
   const tags = baseTags(args.cwd, sessionId, args.config);
@@ -178,31 +195,21 @@ export function formatDebugReport(args: DebugReportArgs): string {
       scopeMigrate: args.scopeMigrate ?? null,
       memoryProfile: memoryProfile(args.config),
       projectBankId: args.projectBankId,
-      projectBankSelection: args.config.banks.project.bankId
-        ? "configured"
-        : args.config.banks.project.derive,
+      projectBankSelection: codingEntry?.bankId ? "configured" : (codingEntry?.derive ?? "repo"),
       bankMissions: {
-        projectConfigured: Boolean(
-          args.config.banks.project.retainMission ||
-          args.config.banks.project.reflectMission ||
-          args.config.banks.project.observationsMission,
-        ),
-        globalConfigured: Boolean(
-          args.config.banks.user.retainMission ||
-          args.config.banks.user.reflectMission ||
-          args.config.banks.user.observationsMission,
-        ),
+        projectConfigured: Object.keys(bankMissionSettings(codingEntry)).length > 0,
+        globalConfigured: Object.keys(bankMissionSettings(userEntry)).length > 0,
       },
       observations: observationScopes,
       overrideProjectBankId:
-        "Set PI_HINDSIGHT_PROJECT_BANK_ID or .pi/hindsight.json banks.project.bankId",
-      globalBankId: args.config.banks.user.enabled ? (args.config.banks.user.bankId ?? null) : null,
+        "Set PI_HINDSIGHT_PROJECT_BANK_ID or the coding bank's bankId in .pi/hindsight.json",
+      globalBankId: userEnabled ? (userEntry?.bankId ?? null) : null,
       memoryRoutes: {
         recall: [
-          ...(args.config.banks.project.enabled ? ["project"] : []),
-          ...(args.config.banks.user.enabled && args.config.banks.user.bankId ? ["global"] : []),
+          ...(codingEnabled ? ["project"] : []),
+          ...(userEnabled && userEntry?.bankId ? ["global"] : []),
         ],
-        autoRetain: args.config.banks.project.enabled ? "project" : null,
+        autoRetain: codingEnabled ? "project" : null,
       },
       tags,
       queuePath: args.config.retain.queuePath,

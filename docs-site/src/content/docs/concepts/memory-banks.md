@@ -21,7 +21,7 @@ Most people need **one coding bank** shared across normal repos.
 
 **Pick this unless** the repo is sensitive client work or must never share a bank.
 
-Config field: `banks.project.bankId` (legacy docs may still say “Project Bank” for this path).
+Config field: the coding entry's `bankId` in `banks` (legacy docs may still say “Project Bank” for this path).
 
 ## Optional: Life / User bank
 
@@ -44,7 +44,7 @@ One **dedicated** bank for a single repo. Hard wall; no shared coding bank.
 
 Use for client work, secrets, or “this repo must not share memory with anything else.”
 
-Guided setup profile: **Isolated project**. Path-derived hashed bank id is fine if you leave the default. Set `banks.project.derive` to `basename` only when this repo must share a folder-named bank with another Hindsight client.
+Guided setup profile: **Isolated project**. Path-derived hashed bank id is fine if you leave the default. Set the coding entry's `derive` to `basename` only when this repo must share a folder-named bank with another Hindsight client.
 
 ## Quick compare
 

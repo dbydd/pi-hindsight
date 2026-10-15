@@ -12,6 +12,7 @@ import {
   recallScopeTags,
 } from "../extensions/banks/banking.js";
 import { liveDocumentId, stableSessionId } from "../extensions/utils/session.js";
+import { banks } from "./helpers/bank-config.js";
 
 const LOCAL_GIT_ENV_KEYS = [
   "GIT_ALTERNATE_OBJECT_DIRECTORIES",
@@ -179,10 +180,7 @@ describe("domain coding bank roles", () => {
     const config = {
       ...DEFAULT_CONFIG,
       scope: { ...DEFAULT_CONFIG.scope, mode: "domain-tagged" as const },
-      banks: {
-        ...DEFAULT_CONFIG.banks,
-        project: { enabled: true, bankId: "kai-coding", derive: "manual" as const },
-      },
+      banks: banks({ project: { enabled: true, bankId: "kai-coding", derive: "manual" } }),
     };
     expect(deriveProjectBankId("/any/repo", config)).toBe("kai-coding");
     expect(deriveProjectBankId("/other/repo", config)).toBe("kai-coding");
@@ -192,10 +190,7 @@ describe("domain coding bank roles", () => {
     const config = {
       ...DEFAULT_CONFIG,
       scope: { ...DEFAULT_CONFIG.scope, mode: "domain-tagged" as const },
-      banks: {
-        ...DEFAULT_CONFIG.banks,
-        project: { enabled: true, bankId: "kai-coding", derive: "basename" as const },
-      },
+      banks: banks({ project: { enabled: true, bankId: "kai-coding", derive: "basename" } }),
     };
     expect(deriveProjectBankId("/any/my_websites", config)).toBe("kai-coding");
   });
@@ -210,10 +205,7 @@ describe("domain coding bank roles", () => {
     const config = {
       ...DEFAULT_CONFIG,
       scope: { ...DEFAULT_CONFIG.scope, mode: "isolated-bank" as const },
-      banks: {
-        ...DEFAULT_CONFIG.banks,
-        project: { enabled: true, derive: "basename" as const },
-      },
+      banks: banks({ project: { enabled: true, derive: "basename" } }),
     };
     withoutLocalGitEnv(() => {
       expect(deriveProjectBankId(child, config)).toBe("my_websites");

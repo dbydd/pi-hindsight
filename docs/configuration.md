@@ -51,11 +51,52 @@ Project config SecretRef shape:
 - **User Only**: project bank disabled; user bank enabled from global Pi config.
 - **Recall Only**: automatic recall enabled; automatic retain disabled; explicit tools and imports remain available.
 
-When a profile uses user memory, guided setup asks for a user bank ID and writes it to global Pi config. Override it later with `PI_HINDSIGHT_USER_BANK_ID`, `~/.pi/agent/hindsight.json` `banks.user.bankId`, or the setup TUI if you prefer a different shared bank. Legacy `PI_HINDSIGHT_GLOBAL_BANK_ID`, `banks.global`, and `global-only` config names are migrated/supported during transition.
+When a profile uses user memory, guided setup asks for a user bank ID and writes it to global Pi config. Override it later with `PI_HINDSIGHT_USER_BANK_ID`, the `user`-alias entry's `bankId` in `~/.pi/agent/hindsight.json`, or the setup TUI if you prefer a different shared bank. Legacy `PI_HINDSIGHT_GLOBAL_BANK_ID`, `banks.global`, and `global-only` config names are migrated/supported during transition.
+
+## Bank list (`banks`)
+
+`banks` is an **ordered array** of bank entries. Each entry needs a stable `id`; the two reserved role aliases are `alias: "project"` (coding) and `alias: "user"` (life).
+
+```jsonc
+{
+  "banks": [
+    {
+      "id": "coding",
+      "alias": "project",
+      "bankId": "pi-coding",
+      "enabled": true,
+      "access": "read-write",
+      "derive": "manual",
+      "description": "This repo's architecture, tasks, decisions, and constraints",
+      "mission": { "retain": "…", "reflect": "…", "observations": "…" },
+      "recall": { "enabled": true, "maxTokens": 800, "preamble": "…" },
+      "retain": { "enabled": true, "mode": "decision" },
+      "tagGroups": [],
+    },
+    { "id": "life", "alias": "user", "bankId": "agent-global-stable", "access": "read-write" },
+  ],
+  "banksFallback": ["coding"],
+}
+```
+
+| Field           | Meaning                                                                                                           |
+| --------------- | ----------------------------------------------------------------------------------------------------------------- |
+| `id`            | Stable unique key. Layers merge by `id`; tools and the decision model reference it.                               |
+| `alias`         | `project` or `user`. Keeps the coding / life role semantics (tags, `derive`, shared observations).                |
+| `bankId`        | Concrete Hindsight bank. Required for `alias: "user"`; optional for coding entries.                               |
+| `enabled`       | Defaults to `true`. `{ "id": "x", "enabled": false }` disables a bank from any layer.                             |
+| `access`        | `read`, `write`, or `read-write` (default). Read paths skip `write` entries; write paths skip `read` entries.     |
+| `derive`        | Only meaningful for `alias: "project"`: `repo`, `cwd`, `manual`, `basename`.                                      |
+| `tagGroups`     | Explicit Hindsight tag groups; replaces derived tags for that entry.                                              |
+| `banksFallback` | Bank ids used when the decision model fails or returns unusable output. Replaced wholesale per layer, not merged. |
+
+**Layer merge:** global Pi config is the base and the repo config overlays it. Entries merge by `id` — field-level, with `mission`, `recall`, and `retain` merged one level deeper and `tagGroups` replaced whole. A new `id` appends to the tail, so recall order stays stable. `banksFallback` is replaced wholesale.
+
+**Legacy three-slot configs still work.** A `banks` object is normalized on read: `project` (or `coding`) becomes the coding entry, and `user` (or `global`, or `life`) becomes the life entry, carrying `enabled`, `bankId`, `derive`, and mission fields with them. Writers only ever produce the array form.
 
 ## Isolated bank naming
 
-`banks.project.bankId` always wins. If it is unset, `banks.project.derive` chooses the name:
+The coding entry's `bankId` always wins. If it is unset, its `derive` chooses the name:
 
 - `repo` / `cwd` (default): hashed `pi-project-<slug>-<pathHash>`
 - `basename`: git-root folder name as-is (opt-in; share isolated banks with folder-named clients)
@@ -94,16 +135,21 @@ Bank missions are intentionally absent from this JSON example. Hindsight bank co
 
 ```json
 {
-  "banks": {
-    "project": {
+  "banks": [
+    {
+      "id": "coding",
+      "alias": "project",
       "bankId": "pi-project-my-repo",
       "derive": "manual"
     },
-    "user": {
+    {
+      "id": "life",
+      "alias": "user",
       "enabled": false,
       "bankId": "user-luxus"
     }
-  },
+  ],
+  "banksFallback": ["coding"],
   "recall": {
     "budget": "mid",
     "maxTokens": 800,

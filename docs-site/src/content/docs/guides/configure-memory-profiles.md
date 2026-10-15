@@ -44,12 +44,14 @@ Shared coding bank (prefer user/global config so every repo inherits it):
 
 ```json
 {
-  "banks": {
-    "project": {
+  "banks": [
+    {
+      "id": "coding",
+      "alias": "project",
       "derive": "manual",
       "bankId": "pi-coding"
     }
-  },
+  ],
   "setupComplete": true
 }
 ```

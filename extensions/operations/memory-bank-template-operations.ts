@@ -6,6 +6,7 @@ import {
 } from "../banks/bank-templates.js";
 import { resolveProjectIdentity } from "../banks/banking.js";
 import { resolveOperationBank } from "../banks/bank-selection.js";
+import { bankMissionSettings, codingBankEntry, userBankEntry } from "../config/banks.js";
 import { seedKnowledgePages } from "../banks/knowledge-page-seed.js";
 import type { MemoryOperationsDeps } from "./memory-operation-types.js";
 
@@ -38,12 +39,12 @@ export function createBankTemplateOperations(deps: MemoryOperationsDeps) {
         config,
         projectBankId: deps.getProjectBankId(),
       });
-      const bankMissionSettings =
-        template.target === "user" ? config.banks.user : config.banks.project;
+      const missionSettings =
+        template.target === "user" ? userBankEntry(config) : codingBankEntry(config);
       const cwd = (deps as { getCwd?: () => string }).getCwd?.() ?? process.cwd();
       const resolvedProjectId =
         template.target === "project" ? resolveProjectIdentity(cwd, config).projectId : undefined;
-      const manifest = resolveBankTemplateManifest(template, bankMissionSettings, {
+      const manifest = resolveBankTemplateManifest(template, bankMissionSettings(missionSettings), {
         ...(resolvedProjectId ? { projectId: resolvedProjectId } : {}),
       });
       const dryRun = args.dryRun ?? true;

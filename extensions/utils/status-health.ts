@@ -4,6 +4,12 @@ import {
 } from "../banks/bank-settings-presenter.js";
 import { resolveBankExistence } from "../banks/bank-operations.js";
 import type { HindsightLikeClient, ResolvedConfig } from "../types.js";
+import {
+  bankEntryEnabled,
+  bankMissionSettings,
+  codingBankEntry,
+  userBankEntry,
+} from "../config/banks.js";
 import { redactError } from "./sanitize.js";
 
 export type StatusHealthFacts = Array<[string, string]>;
@@ -45,16 +51,18 @@ function dateField(value: unknown, key: string): string | undefined {
 }
 
 function bankRoutes(config: ResolvedConfig, projectBankId: string): BankRoute[] {
+  const coding = codingBankEntry(config);
+  const user = userBankEntry(config);
   return [
-    ...(config.banks.project.enabled
+    ...(coding && bankEntryEnabled(coding)
       ? [{ label: "Project bank" as const, location: "Project" as const, bankId: projectBankId }]
       : []),
-    ...(config.banks.user.enabled && config.banks.user.bankId
+    ...(user && bankEntryEnabled(user) && user.bankId
       ? [
           {
             label: "User bank" as const,
             location: "User" as const,
-            bankId: config.banks.user.bankId,
+            bankId: user.bankId,
           },
         ]
       : []),

@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
+import { banks } from "./helpers/bank-config.js";
 import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -445,10 +446,7 @@ describe("operation catalog", () => {
     const cwd = mkdtempSync(join(tmpdir(), "pi-hindsight-catalog-"));
     const config: ResolvedConfig = {
       ...DEFAULT_CONFIG,
-      banks: {
-        ...DEFAULT_CONFIG.banks,
-        user: { ...DEFAULT_CONFIG.banks.user, enabled: true, bankId: "global-bank" },
-      },
+      banks: banks({ user: { enabled: true, bankId: "global-bank" } }),
     };
     const catalog = createOperationCatalog({
       getClient: () => ({ ...client(), retain }),

@@ -14,6 +14,7 @@ import {
   type ConfigLayers,
 } from "../extensions/config/config-editing-model.js";
 import { buildStatusFacts } from "../extensions/config/config-editing-registry.js";
+import { banks } from "./helpers/bank-config.js";
 
 describe("config editing model", () => {
   function layers(overrides: Partial<ConfigLayers> = {}): ConfigLayers {
@@ -152,15 +153,19 @@ describe("config editing model", () => {
 
     const projectGlobalConfig = {
       ...DEFAULT_CONFIG,
-      banks: {
-        ...DEFAULT_CONFIG.banks,
-        user: { ...DEFAULT_CONFIG.banks.user, enabled: true, bankId: "user-bank" },
-      },
+      banks: banks({ user: { enabled: true, bankId: "user-bank" } }),
     };
     const projectGlobalFields = buildConfigEditingFields(
       projectGlobalConfig,
       "bank",
-      layers({ project: { banks: { project: { enabled: true }, user: { enabled: true } } } }),
+      layers({
+        project: {
+          banks: [
+            { id: "project", alias: "project", enabled: true },
+            { id: "user", alias: "user", enabled: true },
+          ],
+        },
+      }),
     );
 
     expect(projectGlobalFields.find((field) => field.id === "memoryProfile")).toMatchObject({
@@ -177,10 +182,7 @@ describe("config editing model", () => {
     });
     const configuredGlobal = {
       ...DEFAULT_CONFIG,
-      banks: {
-        ...DEFAULT_CONFIG.banks,
-        user: { ...DEFAULT_CONFIG.banks.user, bankId: "global-luxus" },
-      },
+      banks: banks({ user: { bankId: "global-luxus" } }),
     };
     expect(patchForConfigEditingField("memoryProfile", "project+global", configuredGlobal)).toEqual(
       {
@@ -266,15 +268,10 @@ describe("config editing model", () => {
       buildStatusFacts(
         {
           ...DEFAULT_CONFIG,
-          banks: {
-            ...DEFAULT_CONFIG.banks,
-            project: { ...DEFAULT_CONFIG.banks.project, retainMission: "Project retain mission" },
-            user: {
-              enabled: true,
-              bankId: "global-luxus",
-              retainMission: "Global retain mission",
-            },
-          },
+          banks: banks({
+            project: { retainMission: "Project retain mission" },
+            user: { enabled: true, bankId: "global-luxus", retainMission: "Global retain mission" },
+          }),
         },
         "project-bank",
       ),

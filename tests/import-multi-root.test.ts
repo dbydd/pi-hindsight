@@ -2,6 +2,7 @@ import { mkdtempSync, mkdirSync, realpathSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it, vi } from "vitest";
+import { banks } from "./helpers/bank-config.js";
 import { DEFAULT_CONFIG } from "../extensions/config/config.js";
 import {
   buildMultiRootProjectImportPlan,
@@ -463,10 +464,7 @@ describe("multi-root Pi session import orchestration", () => {
     writeFileSync(join(root, "session.jsonl"), sessionJsonl({ id: "session", cwd: project }));
     const config: ResolvedConfig = {
       ...DEFAULT_CONFIG,
-      banks: {
-        ...DEFAULT_CONFIG.banks,
-        user: { ...DEFAULT_CONFIG.banks.user, enabled: true, bankId: "user-bank" },
-      },
+      banks: banks({ user: { enabled: true, bankId: "user-bank" } }),
     };
     const getBankProfile = vi.fn(async (bankId: string) => ({ id: bankId }));
     const delegate = vi.fn(async (args: ImportProjectSessionsArgs) =>

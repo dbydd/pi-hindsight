@@ -7,6 +7,7 @@ import {
   safeConfig,
 } from "../extensions/utils/diagnostics.js";
 import type { ImportManifestEntry } from "../extensions/imports/import-plan.js";
+import { banks } from "./helpers/bank-config.js";
 import {
   PI_HINDSIGHT_CLIENT_RANGE,
   PI_HINDSIGHT_SUPPORTED_NODE,
@@ -36,16 +37,15 @@ function latestImport(overrides: Partial<ImportManifestEntry> = {}): ImportManif
 describe("diagnostics", () => {
   it("explains automatic bank selection and override", () => {
     expect(bankSelectionMessage("bank-1", DEFAULT_CONFIG)).toContain("path-derived");
-    expect(bankSelectionMessage("bank-1", DEFAULT_CONFIG)).toContain("banks.project.bankId");
+    expect(bankSelectionMessage("bank-1", DEFAULT_CONFIG)).toContain(
+      "set banks.project.bankId for a shared domain bank",
+    );
   });
 
   it("explains configured bank selection", () => {
     const config = {
       ...DEFAULT_CONFIG,
-      banks: {
-        ...DEFAULT_CONFIG.banks,
-        project: { ...DEFAULT_CONFIG.banks.project, bankId: "manual" },
-      },
+      banks: banks({ project: { bankId: "manual" } }),
     };
     expect(bankSelectionMessage("manual", config)).toBe(
       "Hindsight coding bank (domain-tagged): manual",
@@ -139,11 +139,11 @@ describe("diagnostics", () => {
         projectBankId: "project-bank",
         config: {
           ...DEFAULT_CONFIG,
-          banks: {
+          banks: banks({
             project: { enabled: false, derive: "repo" },
             user: { enabled: true, bankId: "global-bank" },
             global: { enabled: true, bankId: "global-bank" },
-          },
+          }),
         },
         queueLength: 0,
       }),
@@ -160,11 +160,11 @@ describe("diagnostics", () => {
         projectBankId: "project-bank",
         config: {
           ...DEFAULT_CONFIG,
-          banks: {
+          banks: banks({
             project: { enabled: false, derive: "repo" },
             user: { enabled: false },
             global: { enabled: false },
-          },
+          }),
         },
         queueLength: 0,
       }),

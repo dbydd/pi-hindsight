@@ -1,4 +1,5 @@
 import type { ResolvedConfig } from "../types.js";
+import { bankEntryEnabled, userBankEntry } from "../config/banks.js";
 
 export function resolveOperationBank(args: {
   requestedBank: string | undefined;
@@ -8,11 +9,11 @@ export function resolveOperationBank(args: {
   const requested = args.requestedBank?.trim();
   if (!requested || requested === "project") return args.projectBankId;
   if (requested === "global") {
-    if (!args.config.banks.user.enabled)
-      throw new Error("User Hindsight bank is disabled. Enable banks.user first.");
-    if (!args.config.banks.user.bankId)
-      throw new Error("User Hindsight bank ID is not configured.");
-    return args.config.banks.user.bankId;
+    const user = userBankEntry(args.config);
+    if (!user || !bankEntryEnabled(user))
+      throw new Error("User Hindsight bank is disabled. Enable the user bank first.");
+    if (!user.bankId) throw new Error("User Hindsight bank ID is not configured.");
+    return user.bankId;
   }
   return requested;
 }
