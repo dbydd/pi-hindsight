@@ -96,4 +96,10 @@ Host controls:
 - **omp** reads `loadMode`. `essential` (resident) keeps the tool on the top-level surface; `discoverable` (cold path) puts it behind `xd://` discovery. `tools.xdevDocs` sets how device docs are surfaced (default `catalog`), and `tools.xdevInlineDevices` is an allowlist of devices whose docs are inlined into the prompt.
 - **pi** reads `exposure`. `direct` (resident) is active as soon as the extension registers it; `deferred` (cold path) must be activated — with `--tools` / `defaultTools` at session start, or `setActiveTools` mid-session — and stays reachable through tool search when it is not active.
 
+### One memory entry point per host
+
+Pi ships no memory backend, so Pi Hindsight is its only memory surface there. omp ships a **built-in** Hindsight backend, and running it alongside this extension means two entry points writing two different banks from one session. Turn the built-in off by removing the `memory.backend` and `hindsight` blocks from `~/.omp/agent/config.yml`: `memory.backend` defaults to `off`, and the `hindsight.*` keys only configure that built-in. Removing them also drops omp's `recall` / `retain` / `reflect` / `learn` / `memory_edit` tools, its `memory://` namespace, and its mental-model injection — this extension owns all of those on both hosts.
+
+Check it with `omp config get memory.backend` (expect `off`).
+
 See the generated [surface reference](surface-reference.md) for parameter schemas.
