@@ -8,6 +8,7 @@ import type { AgentEndEvent } from "@earendil-works/pi-coding-agent";
 import { resolveConfig } from "../config/config.js";
 import { consumeLastConfigMigrationResults } from "../config/config.js";
 import { isMemorySetupComplete, setupRequiredMessage } from "../config/setup-gate.js";
+import { probeHostDirs, setRuntimeSessionFile } from "../config/paths.js";
 import { deriveProjectBankId } from "../banks/banking.js";
 import {
   bankEntryEnabled,
@@ -52,7 +53,7 @@ export interface MemoryLifecycleDeps {
   getConfig(): ResolvedConfig;
   getProjectBankId(): string;
   getInitHealth(): InitHealth | undefined;
-  reloadConfig(cwd: string): void;
+  reloadConfig(cwd: string, sessionFile?: string): void;
 }
 
 export interface MemoryLifecycle {
@@ -82,9 +83,9 @@ export function createMemoryLifecycle(
     periodicFlush = undefined;
   };
 
-  const reloadConfig = (cwd: string) => {
+  const reloadConfig = (cwd: string, sessionFile?: string) => {
     stopPeriodicFlush();
-    config = resolveConfig(cwd);
+    config = resolveConfig(cwd, process.env, sessionFile);
     client = createHindsightClient(config);
     projectBankId = deriveProjectBankId(cwd, config);
   };
@@ -166,7 +167,11 @@ export function createMemoryLifecycle(
     async initialize(ctx: RuntimeCtx): Promise<void> {
       const runtime = snapshotRuntime(ctx);
       if (!runtime) return;
-      reloadConfig(runtime.cwd);
+      // Host paths (`.pi` vs `.omp`) come from runtime truth: the live session file
+      // first, the host package probe second. Both must land before any config read.
+      setRuntimeSessionFile(runtime.sessionFile);
+      await probeHostDirs();
+      reloadConfig(runtime.cwd, runtime.sessionFile);
       const migrations = consumeLastConfigMigrationResults();
       if (migrations.length) {
         notify(

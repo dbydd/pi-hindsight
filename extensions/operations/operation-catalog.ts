@@ -10,10 +10,13 @@ import { renderMemoryToolTextResult, retainToolResponse } from "../tui/tool-pres
 import { getSessionFile } from "../utils/session.js";
 import { hostConfigDirName } from "../config/paths.js";
 
-const PROJECT_CONFIG_FILE = `${hostConfigDirName()}/hindsight.json`;
-const PROJECT_STATE_DIR = `${hostConfigDirName()}/hindsight/`;
-
-export const HINDSIGHT_DISABLED_TOOL_MESSAGE = `Hindsight is disabled for this repository (enabled=false). Open /hindsight and set enabled=true (and restore status.style if desired), or edit ${PROJECT_CONFIG_FILE}.`;
+/**
+ * Built per call: the host profile (`.pi` vs `.omp`) is only known once the session
+ * started, which is long after this module is loaded.
+ */
+function hindsightDisabledToolMessage(): string {
+  return `Hindsight is disabled for this repository (enabled=false). Open /hindsight and set enabled=true (and restore status.style if desired), or edit ${hostConfigDirName()}/hindsight.json.`;
+}
 
 export type ToolOperation = Parameters<ExtensionAPI["registerTool"]>[0];
 
@@ -167,7 +170,7 @@ export function createOperationCatalog(deps: MemoryOperationsDeps): OperationCat
         useCwd(ctx.cwd);
         if (!deps.getConfig().enabled) {
           return {
-            content: [{ type: "text" as const, text: HINDSIGHT_DISABLED_TOOL_MESSAGE }],
+            content: [{ type: "text" as const, text: hindsightDisabledToolMessage() }],
             details: { disabled: true as const },
           };
         }
@@ -635,7 +638,7 @@ export function createOperationCatalog(deps: MemoryOperationsDeps): OperationCat
         ),
         scope: Type.Optional(
           Type.Union([Type.Literal("project"), Type.Literal("global")], {
-            description: `Which config file to write (default project ${PROJECT_CONFIG_FILE}).`,
+            description: `Which config file to write (default project ${hostConfigDirName()}/hindsight.json).`,
           }),
         ),
         dryRun: Type.Optional(
@@ -855,7 +858,7 @@ export function createOperationCatalog(deps: MemoryOperationsDeps): OperationCat
     defineCatalogTool({
       name: "hindsight_scope_migrate",
       label: "Hindsight Scope Migrate Dry-Run",
-      description: `Dry-run only: plan dual-tag / legacy repo:<path-hash> → project:<id> migration. Writes a local receipt under ${PROJECT_STATE_DIR}. Never rewrites Hindsight tags or documents. Prefer Hindsight export/import or Pi transcript reimport for actual rebuilds.`,
+      description: `Dry-run only: plan dual-tag / legacy repo:<path-hash> → project:<id> migration. Writes a local receipt under ${hostConfigDirName()}/hindsight/. Never rewrites Hindsight tags or documents. Prefer Hindsight export/import or Pi transcript reimport for actual rebuilds.`,
       parameters: Type.Object({
         bankTags: Type.Optional(
           Type.Array(Type.String(), {
@@ -865,7 +868,7 @@ export function createOperationCatalog(deps: MemoryOperationsDeps): OperationCat
         ),
         writeReceipt: Type.Optional(
           Type.Boolean({
-            description: `Write ${PROJECT_STATE_DIR}scope-migrate-receipt.json (default true).`,
+            description: `Write ${hostConfigDirName()}/hindsight/scope-migrate-receipt.json (default true).`,
           }),
         ),
       }),
