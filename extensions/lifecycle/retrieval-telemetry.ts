@@ -9,7 +9,7 @@ export interface RetrievalResultRef {
 
 export interface RetrievalTelemetry {
   version: 1;
-  phase: "retrieval" | "injection";
+  phase: "retrieval" | "injection" | "decision";
   mode: "automatic" | "explicit";
   startedAt: string;
   endedAt: string;

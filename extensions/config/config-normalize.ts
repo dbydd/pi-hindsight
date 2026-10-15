@@ -1,5 +1,7 @@
 import {
   RECALL_SCORE_FIELDS,
+  type BankConfigEntry,
+  type DecisionConfig,
   type HindsightEntityInput,
   type RecallMinScores,
   type ResolvedConfig,
@@ -163,6 +165,28 @@ function scoreFloors(value: unknown): RecallMinScores | undefined {
   return Object.keys(floors).length ? floors : undefined;
 }
 
+/**
+ * `decision` is normalized like the rest of the config: unusable values fall back
+ * to defaults, and fallback bank ids resolve against the configured entries so a
+ * stale id cannot route to a bank that no longer exists.
+ */
+function decisionConfig(value: unknown, banks: BankConfigEntry[]): DecisionConfig {
+  const raw = isRecord(value) ? value : {};
+  const fallback = isRecord(raw.fallback) ? raw.fallback : {};
+  return {
+    enabled: bool(raw.enabled, DEFAULT_CONFIG.decision.enabled),
+    model: stringValue(raw.model, DEFAULT_CONFIG.decision.model),
+    maxTokens: positiveInt(raw.maxTokens, DEFAULT_CONFIG.decision.maxTokens),
+    timeoutMs: positiveInt(raw.timeoutMs, DEFAULT_CONFIG.decision.timeoutMs),
+    maxContextChars: positiveInt(raw.maxContextChars, DEFAULT_CONFIG.decision.maxContextChars),
+    cacheTtlMs: positiveInt(raw.cacheTtlMs, DEFAULT_CONFIG.decision.cacheTtlMs),
+    fallback: {
+      recallBanks: normalizeBanksFallback(fallback.recallBanks, banks),
+      retainBanks: normalizeBanksFallback(fallback.retainBanks, banks),
+    },
+  };
+}
+
 function hasConfiguredRecallField(rawConfig: unknown, field: string): boolean {
   return isRecord(rawConfig) && isRecord(rawConfig.recall) && field in rawConfig.recall;
 }
@@ -252,6 +276,7 @@ export function normalizeConfig(
     },
     banks,
     banksFallback,
+    decision: decisionConfig(config.decision, banks),
     observations: {
       enabled: bool(config.observations?.enabled, DEFAULT_CONFIG.observations.enabled),
       scopes: stringMatrix(config.observations?.scopes, DEFAULT_CONFIG.observations.scopes),

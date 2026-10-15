@@ -29,6 +29,15 @@ export const DEFAULT_CONFIG: ResolvedConfig = {
     { id: "life", alias: "user", enabled: false, access: "read-write" },
   ],
   banksFallback: [],
+  decision: {
+    enabled: true,
+    model: "role:judge",
+    maxTokens: 200,
+    timeoutMs: 3_000,
+    maxContextChars: 6_000,
+    cacheTtlMs: 60_000,
+    fallback: { recallBanks: [], retainBanks: [] },
+  },
   recall: {
     enabled: true,
     budget: "mid",
