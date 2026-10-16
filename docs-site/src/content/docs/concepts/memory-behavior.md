@@ -261,7 +261,9 @@ The prompt carries three parts:
 
 `maxContextChars` budgets only the recent-activity section. The last user message and the task state are
 never truncated by it, so a long transcript crowds out old chatter but cannot crowd out what the turn is
-about and what work is open.
+about and what work is open. When the config file carries no `maxContextChars`, the budget is derived
+from the resolved decision model: a quarter of its `contextWindow`, clamped to 2k–12k tokens, times 4
+characters per token. See [Configuration](../reference/configuration.md#decision-layer-decision).
 
 Task state is read per host, and the two hosts read it differently:
 

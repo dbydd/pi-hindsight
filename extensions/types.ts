@@ -95,10 +95,28 @@ export interface DecisionFallbackConfig {
 export interface DecisionConfig {
   enabled: boolean;
   model: string;
+  /**
+   * Output cap per answer. A hand-written value wins; `<= 0` means no cap, so
+   * the field is left off the backend call and the transport keeps its own.
+   */
   maxTokens: number;
+  /**
+   * Per-attempt budget in milliseconds, normalized to `Infinity` when the
+   * configured value is non-positive: no timer is armed, and only the caller's
+   * own signal can stop the call.
+   */
   timeoutMs: number;
-  /** Character budget for the recent-activity section of the decision prompt. */
+  /**
+   * Character budget for the recent-activity section of the decision prompt.
+   * Effective value: a hand-written number, else the value derived from the
+   * resolved model's context window, else this default.
+   */
   maxContextChars: number;
+  /**
+   * True when `maxContextChars` came from the config file rather than the
+   * default, which is what makes it outrank the model-derived budget.
+   */
+  maxContextCharsWritten: boolean;
   cacheTtlMs: number;
   fallback: DecisionFallbackConfig;
 }

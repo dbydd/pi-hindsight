@@ -52,7 +52,9 @@ export function createJudgeBackend(input: {
       };
       const result = await input.judge.judge(request, {
         ...(options.signal ? { signal: options.signal } : {}),
-        maxTokens: options.maxTokens,
+        ...(options.maxTokens !== undefined && options.maxTokens > 0
+          ? { maxTokens: options.maxTokens }
+          : {}),
       });
       return collectAnswers(questions, result?.answers);
     },
@@ -62,7 +64,8 @@ export function createJudgeBackend(input: {
 export interface ClassifierPortInput {
   state: string;
   questions: { id: string; instructions: string }[];
-  maxTokens: number;
+  /** Omitted means the classifier keeps its own output cap. */
+  maxTokens?: number;
   signal?: AbortSignal;
 }
 
@@ -83,7 +86,7 @@ export function createClassifierBackend(input: {
           id: question.id,
           instructions: question.instructions,
         })),
-        maxTokens: options.maxTokens,
+        ...(options.maxTokens !== undefined ? { maxTokens: options.maxTokens } : {}),
         ...(options.signal ? { signal: options.signal } : {}),
       });
       const answers = isRecord(raw) && isRecord(raw.answers) ? raw.answers : raw;
@@ -117,8 +120,8 @@ const BOOL_TOKENS: Record<string, boolean> = {
 
 /**
  * Tolerant boolean coercion. A judgment api answers a `noul` question with a
- * probability, a classifier with a typed answer object, and a text bridge with a
- * JSON boolean; all three land here, and anything unreadable stays undefined so
+ * probability, a classifier with a typed answer object, and a text bridge with
+ * a JSON boolean; all three land here, and anything unreadable stays undefined so
  * the rung reports a missing answer instead of guessing.
  */
 export function coerceBoolean(value: unknown): boolean | undefined {

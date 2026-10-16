@@ -5,6 +5,7 @@ import { join } from "node:path";
 import {
   buildProjectConfigDeletes,
   buildProjectConfigPatch,
+  CONFIG_SCHEMA_URL,
   deepMergeConfig,
   globalConfigPath,
   projectConfigPath,
@@ -235,6 +236,38 @@ describe("config writer", () => {
     );
     expect(result.path).toBe(globalConfigPath(home));
     expect(readGlobalConfig(home)).toMatchObject({ hindsight: { baseUrl: "http://global" } });
+  });
+
+  it("writes the $schema line into a newly created project config", async () => {
+    const cwd = mkdtempSync(join(tmpdir(), "pi-hindsight-config-schema-"));
+    const result = await writeProjectConfig(
+      cwd,
+      buildProjectConfigPatch({ projectBankId: "bank" }),
+    );
+    const written = JSON.parse(readFileSync(result.path, "utf8")) as Record<string, unknown>;
+    expect(written.$schema).toBe(CONFIG_SCHEMA_URL);
+    expect(written.$schema).toBe(
+      "https://raw.githubusercontent.com/dbydd/pi-hindsight/main/schemas/hindsight.schema.json",
+    );
+  });
+
+  it("does not inject $schema into a file that already exists", async () => {
+    const cwd = mkdtempSync(join(tmpdir(), "pi-hindsight-config-schema-existing-"));
+    mkdirSync(join(cwd, ".pi"), { recursive: true });
+    writeFileSync(
+      join(cwd, ".pi", "hindsight.json"),
+      `{ "recall": { "budget": "low" } }\n`,
+      "utf8",
+    );
+
+    await writeProjectConfig(cwd, buildProjectConfigPatch({ projectBankId: "bank" }));
+
+    const written = JSON.parse(readFileSync(projectConfigPath(cwd), "utf8")) as Record<
+      string,
+      unknown
+    >;
+    expect(written).not.toHaveProperty("$schema");
+    expect(written.recall).toEqual({ budget: "low" });
   });
 
   it("edits active project JSONC config instead of creating a shadowing JSON file", async () => {

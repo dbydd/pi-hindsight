@@ -4,6 +4,7 @@ import type { RetrievalObserver } from "../lifecycle/retrieval-telemetry.js";
 import type { BankConfigEntry, ResolvedConfig } from "../types.js";
 import { createDecisionCache } from "./cache.js";
 import { buildDecisionState } from "./context.js";
+import { defaultMaxContextChars } from "./context-budget.js";
 import { DecisionAnswerError, DecisionTimeoutError } from "./errors.js";
 import { resolveDecisionModel } from "./model.js";
 import { decisionFailure, emitDecision } from "./telemetry.js";
@@ -101,14 +102,6 @@ export function createDecisionLayer(deps: DecisionLayerDeps): DecisionLayer {
         return cached;
       }
 
-      const state = buildDecisionState({
-        messages: request.messages,
-        todo: request.todo ?? (await readTodoState(deps)),
-        readCandidates: request.readCandidates,
-        writeCandidates: request.writeCandidates,
-        maxContextChars: settings.maxContextChars,
-      });
-
       const resolved = await resolveDecisionModel({
         spec: settings.model,
         host: deps.host,
@@ -119,11 +112,29 @@ export function createDecisionLayer(deps: DecisionLayerDeps): DecisionLayer {
       const model = `${resolved.ref.provider}/${resolved.ref.modelId}`;
       const ladder = resolved.backends.map((rung) => `${rung.kind}/${rung.label}`);
 
+      // The config value is the hand-written one when present; otherwise the
+      // budget follows the model's own context window. A hand-written value that
+      // is not a usable positive number was already dropped by normalization,
+      // so what remains here is either a written number or the default.
+      const maxContextChars = settings.maxContextCharsWritten
+        ? settings.maxContextChars
+        : defaultMaxContextChars(resolved);
+      const state = buildDecisionState({
+        messages: request.messages,
+        todo: request.todo ?? (await readTodoState(deps)),
+        readCandidates: request.readCandidates,
+        writeCandidates: request.writeCandidates,
+        maxContextChars,
+      });
       for (let index = 0; index < resolved.backends.length; index++) {
         const backend = resolved.backends[index]!;
         try {
           const answers = await withTimeout(
-            (signal) => backend.answer(questions, state, { signal, maxTokens: settings.maxTokens }),
+            (signal) =>
+              backend.answer(questions, state, {
+                signal,
+                ...(settings.maxTokens > 0 ? { maxTokens: settings.maxTokens } : {}),
+              }),
             settings.timeoutMs,
             request.signal,
           );
@@ -324,7 +335,11 @@ async function withTimeout<T>(
     controller.abort(error);
     rejectRace?.(error);
   };
-  const timer = setTimeout(() => fail(new DecisionTimeoutError(timeoutMs)), timeoutMs);
+  // `timeoutMs <= 0` normalizes to Infinity: no timer is armed, and the call
+  // ends only when it settles or the caller's own signal fires.
+  const timer = Number.isFinite(timeoutMs)
+    ? setTimeout(() => fail(new DecisionTimeoutError(timeoutMs)), timeoutMs)
+    : undefined;
   const onAbort = () => fail(abortReason());
   signal?.addEventListener("abort", onAbort, { once: true });
   const race = new Promise<never>((_settle, reject) => {
@@ -333,6 +348,7 @@ async function withTimeout<T>(
   try {
     return await Promise.race([run(controller.signal), race]);
   } finally {
+    // Clearing an unarmed timer id is a no-op, which is exactly the wanted end state.
     clearTimeout(timer);
     signal?.removeEventListener("abort", onAbort);
   }

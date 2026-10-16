@@ -430,6 +430,32 @@ describe("resolveConfig", () => {
     expect(config.retain.entities).toEqual([{ text: "Pi", type: "project" }]);
   });
 
+  it("reads comments and trailing commas from a .json config too", () => {
+    const cwd = tmp();
+    mkdirSync(join(cwd, ".pi"));
+    // The reader is JSONC by parse, not by suffix, so a .json file may carry
+    // comments and a trailing comma.
+    writeFileSync(
+      join(cwd, ".pi", "hindsight.json"),
+      `{
+        // decision budgets are hand-tuned here
+        "decision": {
+          "maxTokens": 1024,
+          "timeoutMs": -1,
+          "maxContextChars": 12000,
+        },
+      }`,
+    );
+
+    const config = resolveConfig(cwd);
+    expect(config.decision).toMatchObject({
+      maxTokens: 1024,
+      timeoutMs: Number.POSITIVE_INFINITY,
+      maxContextChars: 12_000,
+      maxContextCharsWritten: true,
+    });
+  });
+
   it("maps generic query preamble to bank-specific preambles when specific fields are absent", () => {
     const cwd = tmp();
     mkdirSync(join(cwd, ".pi"));

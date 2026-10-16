@@ -25,9 +25,10 @@ describe("decision config normalization", () => {
     expect(normalize(undefined).decision).toEqual({
       enabled: true,
       model: "role:judge",
-      maxTokens: 200,
-      timeoutMs: 3_000,
-      maxContextChars: 6_000,
+      maxTokens: 4_096,
+      timeoutMs: Number.POSITIVE_INFINITY,
+      maxContextChars: 32_768,
+      maxContextCharsWritten: false,
       cacheTtlMs: 60_000,
       fallback: { recallBanks: [], retainBanks: [] },
     });
@@ -49,6 +50,7 @@ describe("decision config normalization", () => {
       maxTokens: 64,
       timeoutMs: 1_500,
       maxContextChars: 500,
+      maxContextCharsWritten: true,
       cacheTtlMs: 1_000,
       fallback: { recallBanks: ["life"], retainBanks: ["coding"] },
     });
@@ -57,12 +59,45 @@ describe("decision config normalization", () => {
   it("falls back to defaults for unusable values", () => {
     expect(normalize("junk").decision).toEqual(DEFAULT_CONFIG.decision);
     expect(
-      normalize({ model: "", maxTokens: -5, timeoutMs: 0, maxContextChars: 1.5 }).decision,
+      normalize({
+        model: "",
+        maxTokens: "64",
+        timeoutMs: 1.5,
+        maxContextChars: 1.5,
+        cacheTtlMs: 0,
+      }).decision,
     ).toMatchObject({
       model: "role:judge",
-      maxTokens: 200,
-      timeoutMs: 3_000,
-      maxContextChars: 6_000,
+      maxTokens: 4_096,
+      timeoutMs: Number.POSITIVE_INFINITY,
+      maxContextChars: 32_768,
+      maxContextCharsWritten: false,
+    });
+  });
+
+  it("keeps a written non-positive maxTokens and timeoutMs as the no-cap settings", () => {
+    expect(normalize({ maxTokens: 0, timeoutMs: -1 }).decision).toMatchObject({
+      maxTokens: 0,
+      timeoutMs: Number.POSITIVE_INFINITY,
+    });
+    expect(normalize({ maxTokens: -64, timeoutMs: 0 }).decision).toMatchObject({
+      maxTokens: -64,
+      timeoutMs: Number.POSITIVE_INFINITY,
+    });
+  });
+
+  it("marks maxContextChars as written only when the config carries a usable number", () => {
+    expect(normalize({ maxContextChars: 500 }).decision).toMatchObject({
+      maxContextChars: 500,
+      maxContextCharsWritten: true,
+    });
+    expect(normalize({ maxContextChars: 0 }).decision).toMatchObject({
+      maxContextChars: DEFAULT_CONFIG.decision.maxContextChars,
+      maxContextCharsWritten: false,
+    });
+    expect(normalize({ maxContextChars: -100 }).decision).toMatchObject({
+      maxContextChars: DEFAULT_CONFIG.decision.maxContextChars,
+      maxContextCharsWritten: false,
     });
   });
 

@@ -1,13 +1,15 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { createDecisionCache } from "../extensions/decision/cache.js";
 import { createDecisionLayer } from "../extensions/decision/decision.js";
 import { recallTurnCacheKey } from "../extensions/lifecycle/memory-lifecycle-recall.js";
+import type { DecisionBackend } from "../extensions/decision/types.js";
 import type {
   DecisionBankCandidate,
   DecisionCache,
   DecisionRequest,
   DecisionResult,
 } from "../extensions/decision/types.js";
+import type { DecisionLayer } from "../extensions/decision/decision.js";
 import type { ResolvedConfig } from "../extensions/types.js";
 import {
   collectEvents,
@@ -460,5 +462,134 @@ describe("decision cache seam", () => {
 
     await layer.decide(request({ readCandidates: [], writeCandidates: [] }));
     expect(reads).toEqual([]);
+  });
+});
+
+describe("decision prompt budget", () => {
+  /** Length of the budgeted recent-activity section of a rendered state. */
+  function activityLength(state: string | undefined): number {
+    const text = state ?? "";
+    const start = text.indexOf("# Recent activity");
+    if (start < 0) return 0;
+    const end = text.indexOf("# Readable banks", start);
+    return (end < 0 ? text.length : end) - start;
+  }
+
+  /** Backend that records the state it was handed, plus the options it saw. */
+  function recordingOptionsBackend(): {
+    backend: DecisionBackend;
+    options: { maxTokens?: number }[];
+    states: string[];
+  } {
+    const seen: { maxTokens?: number }[] = [];
+    const states: string[] = [];
+    return {
+      options: seen,
+      states,
+      backend: {
+        kind: "text",
+        label: "test-backend",
+        async answer(_questions, state, options) {
+          seen.push(options.maxTokens === undefined ? {} : { maxTokens: options.maxTokens });
+          states.push(state);
+          return { inject: true, "read:coding": true };
+        },
+      },
+    };
+  }
+
+  function budgetLayer(input: {
+    backend: DecisionBackend;
+    decision?: Record<string, unknown>;
+    contextWindow?: number;
+  }): DecisionLayer {
+    return createDecisionLayer({
+      host: fakeHost({
+        backends: () => [input.backend],
+        ...(input.contextWindow === undefined
+          ? {}
+          : { modelContextWindow: () => input.contextWindow }),
+      }),
+      getConfig: () => config(input.decision === undefined ? {} : { decision: input.decision }),
+    });
+  }
+
+  /** A turn with recent activity after the last user message. */
+  const ACTIVITY: DecisionRequest["messages"] = [
+    { role: "user", content: "hello", timestamp: 1 },
+    // Several separate lines, so the greedy tail fill can keep a subset: a single
+    // long line is cut whole and both budgets render the same truncation.
+    ...Array.from({ length: 8 }, (_unused, index) => ({
+      role: "assistant" as const,
+      content: `assistant line ${index} ${"x".repeat(30_000)}`,
+      timestamp: 2 + index,
+    })),
+  ];
+
+  it("derives the prompt budget from the model's context window", async () => {
+    // A large window lets the whole fixture through; the 2k-token floor cuts it.
+    const wide = recordingOptionsBackend();
+    await budgetLayer({ backend: wide.backend, contextWindow: 200_000 }).decide(
+      request({ messages: ACTIVITY }),
+    );
+    const narrow = recordingOptionsBackend();
+    await budgetLayer({ backend: narrow.backend, contextWindow: 8_000 }).decide(
+      request({ messages: ACTIVITY }),
+    );
+    expect(activityLength(wide.states[0])).toBeGreaterThan(activityLength(narrow.states[0]));
+  });
+
+  it("keeps a hand-written budget over the model-derived one", async () => {
+    const recorder = recordingOptionsBackend();
+    await budgetLayer({
+      backend: recorder.backend,
+      contextWindow: 1_000_000,
+      decision: { maxContextChars: 1_000 },
+    }).decide(request());
+    // A 1k-char budget leaves no room for the activity section at all.
+    expect(recorder.states[0]).not.toContain("# Recent activity");
+  });
+
+  it("uses the final default when the model reports no context window", async () => {
+    const recorder = recordingOptionsBackend();
+    await budgetLayer({ backend: recorder.backend }).decide(request({ messages: ACTIVITY }));
+    const derived = recordingOptionsBackend();
+    await budgetLayer({ backend: derived.backend, contextWindow: 32_000 }).decide(
+      request({ messages: ACTIVITY }),
+    );
+    // A 32k-token window derives a quarter, 8192 chars; an unreported window
+    // spends the config default instead, which is a larger budget.
+    expect(activityLength(recorder.states[0])).toBeGreaterThan(activityLength(derived.states[0]));
+    expect(activityLength(recorder.states[0])).toBeGreaterThan(0);
+  });
+
+  it("omits maxTokens from the backend call when it is non-positive", async () => {
+    const recorder = recordingOptionsBackend();
+    await budgetLayer({ backend: recorder.backend, decision: { maxTokens: 0 } }).decide(request());
+    expect(recorder.options).toEqual([{}]);
+  });
+
+  it("passes maxTokens through when it is a positive number", async () => {
+    const recorder = recordingOptionsBackend();
+    await budgetLayer({ backend: recorder.backend, decision: { maxTokens: 64 } }).decide(request());
+    expect(recorder.options).toEqual([{ maxTokens: 64 }]);
+  });
+
+  it("arms no timer and still honors the caller's signal when timeoutMs is non-positive", async () => {
+    const events = collectEvents();
+    const setTimeoutSpy = vi.spyOn(globalThis, "setTimeout");
+    const backend = recordingBackend({ inject: true });
+    const layer = createDecisionLayer({
+      host: fakeHost({ backends: () => [backend] }),
+      getConfig: () => config({ decision: { timeoutMs: -1 }, banksFallback: ["coding"] }),
+      observer: events.observer,
+    });
+    const controller = new AbortController();
+    const settled = layer.decide(request({ signal: controller.signal }));
+    controller.abort();
+
+    expect(await settled).toMatchObject({ reason: "aborted" });
+    expect(setTimeoutSpy).not.toHaveBeenCalled();
+    setTimeoutSpy.mockRestore();
   });
 });

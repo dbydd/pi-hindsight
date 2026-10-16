@@ -19,6 +19,7 @@
   },
   "files": [
     "extensions",
+    "schemas",
     "README.md",
     "CHANGELOG.md",
     "docs/adr",

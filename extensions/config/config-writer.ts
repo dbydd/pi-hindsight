@@ -19,6 +19,14 @@ export type { ConfigResetKey } from "./config-field-paths.js";
 
 export const DEFAULT_GLOBAL_BANK_ID = "pi-global";
 
+/**
+ * `$schema` value written into a newly created config file. It points at this
+ * fork's published schema so editors offer completion for the `banks` entries;
+ * the line is inert to the reader and safe to delete.
+ */
+export const CONFIG_SCHEMA_URL =
+  "https://raw.githubusercontent.com/dbydd/pi-hindsight/main/schemas/hindsight.schema.json";
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
@@ -429,14 +437,19 @@ async function writeConfig(
   deletePaths: string[][] = [],
 ): Promise<{ path: string; config: Record<string, unknown> }> {
   for (const deletePathParts of deletePaths) deletePath(base, deletePathParts);
+  // A file that already exists keeps exactly its own keys: injecting a `$schema`
+  // line into a hand-written config would rewrite the user's content. An empty
+  // patch writes nothing worth pointing a schema at.
+  const schema =
+    !existsSync(path) && Object.keys(patch).length > 0 ? { $schema: CONFIG_SCHEMA_URL } : {};
   const next = deepMergeConfig(base, patch);
   await mkdir(dirname(path), { recursive: true });
   if (existsSync(path) && path.endsWith(".jsonc")) {
     await writeJsoncConfig(path, base, patch, deletePaths);
   } else {
-    await writeFile(path, `${JSON.stringify(next, null, 2)}\n`, "utf8");
+    await writeFile(path, `${JSON.stringify({ ...schema, ...next }, null, 2)}\n`, "utf8");
   }
-  return { path, config: next };
+  return { path, config: { ...schema, ...next } };
 }
 
 function getPathValue(value: unknown, path: string[]): unknown {
