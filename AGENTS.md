@@ -389,6 +389,16 @@ npm run smoke:hindsight
 
 GitHub Actions has a `Hindsight Integration` workflow that runs for memory-path changes, `memory-path`/`ci:live-smoke` labels, nightly schedule, and manual dispatch. It runs live smoke only when `HINDSIGHT_INTEGRATION_ENABLED=true`; then it uses `HINDSIGHT_BASE_URL` and optional `HINDSIGHT_API_KEY` secrets. Otherwise it skips cleanly. For memory-path PRs, do not treat an unconfigured skip as proof; either run the smoke test locally with credentials, confirm a configured workflow pass, or document why live proof is unavailable and what lower-level checks cover the risk.
 
+### Verifying on omp
+
+omp ships as a single bundled binary whose `@oh-my-pi/*` specifiers are rewritten at build time. Two consequences bite anyone probing a real omp process:
+
+- **Only literal specifiers survive.** `await import("@oh-my-pi/pi-coding-agent")` works; `await import(someVariable)` is resolved as a plain package lookup at runtime and misses even on omp. Every host module in `extensions/decision/host.ts` and `extensions/config/paths.ts` is therefore loaded through one literal `import()` per candidate, each in its own `try`. Never reintroduce a computed specifier or a loop over candidates — a test guards the source text, because the failure mode is silent (a missing rung, not an error).
+- **Stage the extension as the extension root.** A probe that reaches repo files by absolute path from outside the extension root cannot resolve `@oh-my-pi/*` and reports `undefined` for every loader. Copy (or install) the package into the extension root and load it through omp's own entry, e.g. `omp -p -e <entry>`.
+- **Install as a copy, not a symlink.** A copy under `~/.omp/plugins/node_modules/` resolves `@oh-my-pi/*` (omp keeps those packages inside that directory). Pointing the plugin at a dev checkout outside it has been observed to leave both ladders silently `undefined`, though the exact mechanism is not reproduced here — treat the copy layout as the supported one when a real verification must be trusted.
+
+`@oh-my-pi/pi-utils/dirs` is absent from omp's build-rewrite table and never resolves; use `@oh-my-pi/pi-coding-agent`, which re-exports `getAgentDir` and `CONFIG_DIR_NAME`.
+
 ## Common mistakes to avoid
 
 - converting the conversation into a summary before retain
