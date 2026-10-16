@@ -88,3 +88,40 @@ describe("role ladder", () => {
     await expect(load()).resolves.toBeUndefined();
   });
 });
+
+/**
+ * A bare `resolveOmpRole({role, registry, sessionManager})` — no `runtime`, no
+ * `load` — must reach the production loader. Reading the absent override as "no
+ * runtime" made this call answer nothing, which reads as a broken ladder rather
+ * than a left-out argument.
+ */
+describe("resolveOmpRole with no override", () => {
+  it("resolves through the production loader", async () => {
+    const sessionManager = {};
+    const settings = { model: "@judge" };
+    let seenSpecs: string[] = [];
+
+    vi.doMock("@oh-my-pi/pi-coding-agent", () => ({
+      resolveScopedModels: async (parsed: unknown, _registry: unknown, read: unknown) => {
+        seenSpecs = (parsed as { models?: string[] }).models ?? [];
+        expect(read).toBe(settings);
+        return [{ model: { provider: "magpie-decisions", id: "group/decider" } }];
+      },
+      AgentRegistry: {
+        global: () => ({ list: () => [{ session: { sessionManager, settings } }] }),
+      },
+    }));
+
+    const { resolveOmpRole } = await host();
+    await expect(
+      resolveOmpRole({
+        role: "judge",
+        registry: { getAvailable: () => [] },
+        sessionManager,
+      }),
+    ).resolves.toEqual({ provider: "magpie-decisions", modelId: "group/decider" });
+    // The role arrives as its `@` alias and the settings came from this session's
+    // registry entry, so the whole production path ran rather than a shortcut.
+    expect(seenSpecs).toEqual(["@judge"]);
+  });
+});

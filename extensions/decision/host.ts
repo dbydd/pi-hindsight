@@ -36,6 +36,13 @@ import type {
  * runtime and misses even on omp, which silently cost both judgment rungs. The
  * suite drives the ladder through the exported seams, and both loaders were
  * confirmed against a real omp process, where they answer with the full surface.
+ *
+ * Those literals carry one deployment constraint: install pi-hindsight as a real
+ * *copy* under `~/.omp/plugins/node_modules/`, never as a symlink out to a dev
+ * checkout. omp keeps `@oh-my-pi/*` inside that directory, so package lookup only
+ * reaches those modules while the package itself resolves there; observed on a
+ * real install, a symlinked tree answers `undefined` from both ladders and raises
+ * nothing, the same loud-quiet symptom as a computed specifier. Copy, don't link.
  */
 
 /** The omp judgment surface used by the two omp rungs. */
@@ -297,16 +304,21 @@ function findOmpSessionSettings(runtime: OmpRoleRuntime, sessionManager: unknown
  * role through `modelRegistry.getAvailable()` with no kind, which defaults to
  * `chat` — a judge/image/classifier model is invisible there and the role would
  * silently miss. Undefined wherever any half is unavailable or answers nothing.
+ *
+ * Omit both `runtime` and `load` and this still runs the production path: `load`
+ * falls back to the memoized default, never to "no runtime". Reading absence as
+ * the default made a direct call resolve nothing, which then looked like the
+ * ladder being broken rather than the argument being left out.
  */
 export async function resolveOmpRole(input: {
   role: string;
   registry: HostRegistryLike;
   sessionManager?: unknown;
   runtime?: OmpRoleRuntime;
-  /** Overrides the loader: tests inject a runtime without a real host. */
+  /** Overrides the production loader; tests inject a runtime without a real host. */
   load?: () => Promise<OmpRoleRuntime | undefined>;
 }): Promise<DecisionModelRef | undefined> {
-  const runtime = input.runtime ?? (await input.load?.()) ?? undefined;
+  const runtime = input.runtime ?? (await (input.load ?? loadDefaultRoleRuntime)());
   if (!runtime) return undefined;
   const settings = findOmpSessionSettings(runtime, input.sessionManager);
   if (!settings) return undefined;
