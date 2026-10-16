@@ -270,14 +270,19 @@ function ompModelHandle(
   registry: HostRegistryLike,
   ref: DecisionModelRef,
 ): unknown {
+  // Registry first. The host's `models.resolve()` runs its spec through
+  // `resolveModelRoleValue(..., modelRegistry.getAvailable())`, and `getAvailable()`
+  // defaults to the `chat` kind — so a judge/image/classifier model is invisible
+  // there and an explicit `provider/modelId` spec would miss even though the model
+  // is configured and authenticated. `registry.find` is kind-agnostic.
   try {
-    const resolved = ctx.models?.resolve?.(`${ref.provider}/${ref.modelId}`);
-    if (resolved) return resolved;
+    const found = registry.find?.(ref.provider, ref.modelId);
+    if (found) return found;
   } catch {
-    // Fall through to the registry lookup.
+    // Fall through to the host resolver.
   }
   try {
-    return registry.find?.(ref.provider, ref.modelId);
+    return ctx.models?.resolve?.(`${ref.provider}/${ref.modelId}`);
   } catch {
     return undefined;
   }
