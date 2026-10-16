@@ -1,4 +1,5 @@
 import { isRecord } from "../config/is-record.js";
+import { DEFAULT_DECISION_THRESHOLD } from "../types.js";
 import type {
   DecisionAnswers,
   DecisionBackend,
@@ -56,7 +57,11 @@ export function createJudgeBackend(input: {
           ? { maxTokens: options.maxTokens }
           : {}),
       });
-      return collectAnswers(questions, result?.answers);
+      return collectAnswers(
+        questions,
+        result?.answers,
+        options.threshold ?? DEFAULT_DECISION_THRESHOLD,
+      );
     },
   };
 }
@@ -90,16 +95,24 @@ export function createClassifierBackend(input: {
         ...(options.signal ? { signal: options.signal } : {}),
       });
       const answers = isRecord(raw) && isRecord(raw.answers) ? raw.answers : raw;
-      return isRecord(answers) ? collectAnswers(questions, answers) : {};
+      return isRecord(answers)
+        ? collectAnswers(questions, answers, options.threshold ?? DEFAULT_DECISION_THRESHOLD)
+        : {};
     },
   };
 }
 
 /** Map raw answers onto the question ids; an unanswered id stays undefined. */
-function collectAnswers(questions: readonly DecisionQuestion[], raw: unknown): DecisionAnswers {
+function collectAnswers(
+  questions: readonly DecisionQuestion[],
+  raw: unknown,
+  threshold: number,
+): DecisionAnswers {
   const source = isRecord(raw) ? raw : {};
   const answers: DecisionAnswers = {};
-  for (const question of questions) answers[question.id] = coerceBoolean(source[question.id]);
+  for (const question of questions) {
+    answers[question.id] = coerceBoolean(source[question.id], threshold);
+  }
   return answers;
 }
 
@@ -122,11 +135,18 @@ const BOOL_TOKENS: Record<string, boolean> = {
  * Tolerant boolean coercion. A judgment api answers a `noul` question with a
  * probability, a classifier with a typed answer object, and a text bridge with
  * a JSON boolean; all three land here, and anything unreadable stays undefined so
- * the rung reports a missing answer instead of guessing.
+ * the rung reports a missing answer instead of guessing. `threshold` is the
+ * probability that counts as "yes" (`decision.threshold`, default 0.5); a
+ * non-finite value falls back to it, so a caller can omit it.
  */
-export function coerceBoolean(value: unknown): boolean | undefined {
+export function coerceBoolean(
+  value: unknown,
+  threshold: number = DEFAULT_DECISION_THRESHOLD,
+): boolean | undefined {
   if (typeof value === "boolean") return value;
-  if (typeof value === "number") return Number.isFinite(value) ? value >= 0.5 : undefined;
+  if (typeof value === "number") {
+    return Number.isFinite(value) ? value >= threshold : undefined;
+  }
   if (typeof value === "string") {
     const text = value.trim().toLowerCase();
     return Object.hasOwn(BOOL_TOKENS, text) ? BOOL_TOKENS[text] : undefined;
@@ -134,7 +154,7 @@ export function coerceBoolean(value: unknown): boolean | undefined {
   if (isRecord(value)) {
     for (const key of ANSWER_KEYS) {
       if (!(key in value)) continue;
-      const coerced = coerceBoolean(value[key]);
+      const coerced = coerceBoolean(value[key], threshold);
       if (coerced !== undefined) return coerced;
     }
   }

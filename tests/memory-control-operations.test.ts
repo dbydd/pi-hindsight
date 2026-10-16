@@ -3,6 +3,11 @@ import { mkdtempSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { DEFAULT_CONFIG } from "../extensions/config/config.js";
+import {
+  DEFAULT_INJECT_INSTRUCTION,
+  DEFAULT_READ_INSTRUCTION,
+  DEFAULT_WRITE_INSTRUCTION,
+} from "../extensions/decision/instructions.js";
 import { banks } from "./helpers/bank-config.js";
 import {
   createControlOperations,
@@ -247,6 +252,74 @@ describe("memory control operations", () => {
     expect((got as { values: { apiKeyEnvVar?: string } }).values.apiKeyEnvVar).toBe(
       "HINDSIGHT_API_KEY",
     );
+  });
+
+  it("config get exposes the decision instruction text and threshold", async () => {
+    const cwd = mkdtempSync(join(tmpdir(), "pi-hindsight-cfg-dec-"));
+    const ops = createControlOperations({
+      getClient: () => ({
+        retain: async () => undefined,
+        recall: async () => [],
+        reflect: async () => ({}),
+      }),
+      getConfig: () => DEFAULT_CONFIG,
+      getProjectBankId: () => "coding",
+    });
+    const got = await ops.config({ action: "get", cwd });
+    const values = (got as { values: Record<string, unknown> }).values;
+    expect(values.decisionInstructionsInject).toBe(DEFAULT_INJECT_INSTRUCTION);
+    expect(values.decisionInstructionsRead).toBe(DEFAULT_READ_INSTRUCTION);
+    expect(values.decisionInstructionsWrite).toBe(DEFAULT_WRITE_INSTRUCTION);
+    expect(values.decisionThreshold).toBe(0.5);
+  });
+
+  it("config patch writes instruction text and rejects an out-of-range threshold", async () => {
+    const cwd = mkdtempSync(join(tmpdir(), "pi-hindsight-cfg-dec-patch-"));
+    mkdirSync(join(cwd, ".pi"), { recursive: true });
+    writeFileSync(join(cwd, ".pi", "hindsight.json"), "{}\n");
+    const ops = createControlOperations({
+      getClient: () => ({
+        retain: async () => undefined,
+        recall: async () => [],
+        reflect: async () => ({}),
+      }),
+      getConfig: () => DEFAULT_CONFIG,
+      getProjectBankId: () => "coding",
+    });
+
+    await expect(
+      ops.config({ action: "patch", cwd, patch: { decisionThreshold: 1.5 } }),
+    ).rejects.toThrow(/between 0 and 1/i);
+
+    const dry = await ops.config({
+      action: "patch",
+      cwd,
+      patch: {
+        decisionInstructionsInject: "Only ask when the user names memory.",
+        decisionInstructionsRead: 'Read "{bank}"?',
+        decisionThreshold: 0.75,
+      },
+    });
+    expect(dry).toMatchObject({ dryRun: true });
+
+    await ops.config({
+      action: "patch",
+      cwd,
+      patch: {
+        decisionInstructionsInject: "Only ask when the user names memory.",
+        decisionInstructionsRead: 'Read "{bank}"?',
+        decisionThreshold: 0.75,
+      },
+      dryRun: false,
+    });
+    const disk = JSON.parse(readFileSync(join(cwd, ".pi", "hindsight.json"), "utf8")) as {
+      decision?: { instructions?: Record<string, string>; threshold?: number };
+    };
+    expect(disk.decision?.instructions).toEqual({
+      inject: "Only ask when the user names memory.",
+      read: 'Read "{bank}"?',
+    });
+    expect(disk.decision?.threshold).toBe(0.75);
   });
 
   it("config patch rejects unknown keys and dry-runs by default", async () => {

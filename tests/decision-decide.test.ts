@@ -478,10 +478,10 @@ describe("decision prompt budget", () => {
   /** Backend that records the state it was handed, plus the options it saw. */
   function recordingOptionsBackend(): {
     backend: DecisionBackend;
-    options: { maxTokens?: number }[];
+    options: { maxTokens?: number; threshold?: number }[];
     states: string[];
   } {
-    const seen: { maxTokens?: number }[] = [];
+    const seen: { maxTokens?: number; threshold?: number }[] = [];
     const states: string[] = [];
     return {
       options: seen,
@@ -490,7 +490,10 @@ describe("decision prompt budget", () => {
         kind: "text",
         label: "test-backend",
         async answer(_questions, state, options) {
-          seen.push(options.maxTokens === undefined ? {} : { maxTokens: options.maxTokens });
+          const record: { maxTokens?: number; threshold?: number } = {};
+          if (options.maxTokens !== undefined) record.maxTokens = options.maxTokens;
+          if (options.threshold !== undefined) record.threshold = options.threshold;
+          seen.push(record);
           states.push(state);
           return { inject: true, "read:coding": true };
         },
@@ -566,13 +569,21 @@ describe("decision prompt budget", () => {
   it("omits maxTokens from the backend call when it is non-positive", async () => {
     const recorder = recordingOptionsBackend();
     await budgetLayer({ backend: recorder.backend, decision: { maxTokens: 0 } }).decide(request());
-    expect(recorder.options).toEqual([{}]);
+    expect(recorder.options).toEqual([{ threshold: 0.5 }]);
   });
 
   it("passes maxTokens through when it is a positive number", async () => {
     const recorder = recordingOptionsBackend();
     await budgetLayer({ backend: recorder.backend, decision: { maxTokens: 64 } }).decide(request());
-    expect(recorder.options).toEqual([{ maxTokens: 64 }]);
+    expect(recorder.options).toEqual([{ maxTokens: 64, threshold: 0.5 }]);
+  });
+
+  it("passes the configured threshold to the backend", async () => {
+    const recorder = recordingOptionsBackend();
+    await budgetLayer({ backend: recorder.backend, decision: { threshold: 0.9 } }).decide(
+      request(),
+    );
+    expect(recorder.options).toEqual([{ maxTokens: 4096, threshold: 0.9 }]);
   });
 
   it("arms no timer and still honors the caller's signal when timeoutMs is non-positive", async () => {

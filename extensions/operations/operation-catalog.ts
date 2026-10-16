@@ -655,7 +655,7 @@ export function createOperationCatalog(deps: MemoryOperationsDeps): OperationCat
       name: "hindsight_config_set",
       label: "Hindsight Config Set",
       description:
-        "Patch allowlisted Pi Hindsight config (project or global file) with typed keys only: setupComplete, scopeMode, projectId, projectIdStrategy, includeSharedObservations, userScopeTags, projectBankId, enableGlobalBank, globalBankId, agentUse, mentalModelsInject, memoryProfile, recall/retain knobs, baseUrl, apiKeyEnvVar, timeoutMs. dryRun defaults true (preview) — set false to write. Domain-tagged setupComplete requires projectBankId. Never pass raw API keys — use apiKeyEnvVar. Read current values with hindsight_config_get first.",
+        "Patch allowlisted Pi Hindsight config (project or global file) with typed keys only: setupComplete, scopeMode, projectId, projectIdStrategy, includeSharedObservations, userScopeTags, projectBankId, enableGlobalBank, globalBankId, agentUse, mentalModelsInject, memoryProfile, recall/retain knobs, decision instruction text (decisionInstructionsInject/Read/Write, with {bank}/{description}/{access} placeholders) and decisionThreshold, baseUrl, apiKeyEnvVar, timeoutMs. dryRun defaults true (preview) — set false to write. Domain-tagged setupComplete requires projectBankId. Never pass raw API keys — use apiKeyEnvVar. Read current values with hindsight_config_get first.",
       parameters: Type.Object({
         patch: Type.Object(
           {
@@ -694,6 +694,35 @@ export function createOperationCatalog(deps: MemoryOperationsDeps): OperationCat
               Type.Union([Type.Literal("low"), Type.Literal("mid"), Type.Literal("high")]),
             ),
             recallMaxTokens: Type.Optional(Type.Number({ minimum: 0 })),
+            decisionInstructionsInject: Type.Optional(
+              Type.String({
+                minLength: 1,
+                description:
+                  "Gate A question text: whether this turn injects recall. Supports {bank}, {description}, {access}. An empty string falls back to the built-in default.",
+              }),
+            ),
+            decisionInstructionsRead: Type.Optional(
+              Type.String({
+                minLength: 1,
+                description:
+                  "Gate B read question text: whether recall reads one bank. Supports {bank}, {description}, {access}. An empty string falls back to the built-in default.",
+              }),
+            ),
+            decisionInstructionsWrite: Type.Optional(
+              Type.String({
+                minLength: 1,
+                description:
+                  "Gate B write question text: whether retain writes to one bank. Supports {bank}, {description}, {access}. An empty string falls back to the built-in default.",
+              }),
+            ),
+            decisionThreshold: Type.Optional(
+              Type.Number({
+                minimum: 0,
+                maximum: 1,
+                description:
+                  "Probability at or above which a numeric answer counts as yes. Default 0.5.",
+              }),
+            ),
             retainEnabled: Type.Optional(Type.Boolean()),
             baseUrl: Type.Optional(Type.String({ minLength: 1 })),
             apiKeyEnvVar: Type.Optional(Type.String({ minLength: 1 })),

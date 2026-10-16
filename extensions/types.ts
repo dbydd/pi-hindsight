@@ -80,6 +80,23 @@ export type BankAlias = "project" | "user";
 export type BankRetainMode = "always" | "decision" | "explicit-only";
 export type BankDerive = "repo" | "cwd" | "manual" | "basename";
 
+/**
+ * Default decision point: a backend probability at or above this counts as
+ * "yes". Local models and cloud deciders calibrate differently, so
+ * `decision.threshold` overrides it per config.
+ */
+export const DEFAULT_DECISION_THRESHOLD = 0.5;
+
+/** Rendered question text per decision path; `{placeholder}`s already substituted. */
+export interface DecisionInstructions {
+  /** Gate A: whether this turn injects recall at all. */
+  inject: string;
+  /** Gate B, read half: whether recall reads one specific bank. */
+  read: string;
+  /** Gate B, write half: whether retain writes to one specific bank. */
+  write: string;
+}
+
 /** Bank ids a failed decision falls back to, per memory path. */
 export interface DecisionFallbackConfig {
   /** Recall routing used when the decision model cannot answer. */
@@ -112,6 +129,19 @@ export interface DecisionConfig {
    * resolved model's context window, else this default.
    */
   maxContextChars: number;
+  /**
+   * Question text for the three gates, rendered per bank so `{bank}`,
+   * `{description}`, and `{access}` carry the candidate's own values. An empty
+   * written string falls back to the built-in default, so a config cannot mute
+   * a gate by blanking it.
+   */
+  instructions: DecisionInstructions;
+  /**
+   * Probability at or above which a numeric answer counts as "yes". Local models
+   * and cloud deciders calibrate differently, so the point where a probability
+   * becomes a decision is configurable.
+   */
+  threshold: number;
   /**
    * True when `maxContextChars` came from the config file rather than the
    * default, which is what makes it outrank the model-derived budget.

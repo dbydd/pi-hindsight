@@ -111,17 +111,18 @@ When a profile uses user memory, guided setup asks for a user bank ID and writes
 }
 ```
 
-| Field           | Meaning                                                                                                                                                     |
-| --------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `id`            | Stable unique key. Layers merge by `id`; tools and the decision model reference it. Defaults to `alias`.                                                    |
-| `alias`         | `project` or `user`. Keeps the coding / life role semantics (tags, `derive`, shared observations). Implied by a reserved `id`, and supplies a missing `id`. |
-| `bankId`        | Concrete Hindsight bank. Required for `alias: "user"`; optional for coding entries.                                                                         |
-| `enabled`       | Defaults to `true`. `{ "id": "x", "enabled": false }` disables a bank from any layer.                                                                       |
-| `access`        | `read`, `write`, or `read-write` (default). Read paths skip `write` entries; write paths skip `read` entries.                                               |
-| `derive`        | Only read on a coding entry (`project` role): `repo`, `cwd`, `manual`, `basename`. Ignored elsewhere.                                                       |
-| `retain`        | Automatic write routing for this entry: `enabled` and `mode`. See **Automatic retain modes** below.                                                         |
-| `tagGroups`     | Explicit Hindsight tag groups; replaces derived tags for that entry.                                                                                        |
-| `banksFallback` | Bank ids used when the decision model fails or returns unusable output. Replaced wholesale per layer, not merged.                                           |
+| Field           | Meaning                                                                                                                                                                                                                                  |
+| --------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `id`            | Stable unique key. Layers merge by `id`; tools and the decision model reference it. Defaults to `alias`.                                                                                                                                 |
+| `alias`         | `project` or `user`. Keeps the coding / life role semantics (tags, `derive`, shared observations). Implied by a reserved `id`, and supplies a missing `id`.                                                                              |
+| `bankId`        | Concrete Hindsight bank. Required for `alias: "user"`; optional for coding entries.                                                                                                                                                      |
+| `enabled`       | Defaults to `true`. `{ "id": "x", "enabled": false }` disables a bank from any layer.                                                                                                                                                    |
+| `access`        | `read`, `write`, or `read-write` (default). Read paths skip `write` entries; write paths skip `read` entries.                                                                                                                            |
+| `derive`        | Only read on a coding entry (`project` role): `repo`, `cwd`, `manual`, `basename`. Ignored elsewhere.                                                                                                                                    |
+| `description`   | What the bank holds, in plain content terms; shown to the decision model when it picks banks. Access and write policy belong in `access` and `retain.mode`, not here — see **Writing bank descriptions** under **Decision layer** below. |
+| `retain`        | Automatic write routing for this entry: `enabled` and `mode`. See **Automatic retain modes** below.                                                                                                                                      |
+| `tagGroups`     | Explicit Hindsight tag groups; replaces derived tags for that entry.                                                                                                                                                                     |
+| `banksFallback` | Bank ids used when the decision model fails or returns unusable output. Replaced wholesale per layer, not merged.                                                                                                                        |
 
 **Layer merge:** global Pi config is the base and the repo config overlays it. Entries merge by `id` — field-level, with `mission`, `recall`, and `retain` merged one level deeper and `tagGroups` replaced whole. A new `id` appends to the tail, so recall order stays stable. `banksFallback` is replaced wholesale.
 
@@ -430,7 +431,11 @@ banks, retain at agent end with the write candidates — and each call is cached
 | `maxTokens` | Output cap per answer. `<= 0` means no cap: the field is left off the backend call and the transport keeps its own. |
 | `timeoutMs` | Per-attempt budget in milliseconds. `<= 0` arms no timer, so only the caller's own signal can stop the call. |
 | `maxContextChars` | Character budget for the recent-activity part of the prompt. The last user message and the task state are always included. |
-|| `cacheTtlMs` | Reuse window for a decision, keyed by the offered bank ids (tagged per path) and the last user message content. |
+| `threshold` | Probability at or above which a backend's numeric answer counts as "yes". Default `0.5`. Local models and cloud deciders calibrate differently, so retune it when you swap judge models. Values outside 0–1 fall back to the default. |
+| `instructions.inject` | Gate A question text. No placeholders. An empty string falls back to the built-in default. |
+| `instructions.read` | Gate B read question text, rendered per bank. Placeholders: `{bank}`, `{description}`, `{access}`. |
+| `instructions.write` | Gate B write question text, rendered per bank. Placeholders: `{bank}`, `{description}`, `{access}`. |
+| `cacheTtlMs` | Reuse window for a decision, keyed by the offered bank ids (tagged per path) and the last user message content. |
 || `fallback.recallBanks` / `retainBanks` | Bank ids used when no backend answers. Empty means the top-level `banksFallback` list. Unknown ids are dropped at load time. |
 
 **Budgets.** `maxTokens` bounds only the answer, not the prompt, so it does not constrain the
@@ -450,6 +455,70 @@ that would otherwise have answered.
 **Context.** The prompt carries the last user message, the host task state (`unknown` when it
 cannot be read, never "no tasks"), the recent activity that fits the budget, and every candidate
 bank with its `access` and `description`.
+
+### Decision questions (`decision.instructions`)
+
+The text of the three questions the model answers. All three default to a text that says what the
+gate controls, which state fields bear on it, and which way to lean when the state is ambiguous —
+and all three lean toward **no**.
+
+The lean matters more than it sounds. Injection spends context window on every turn it fires, so a
+gate that fires on weak signals degrades into the every-turn recall this layer exists to replace.
+
+Measured on a local judge (`clef-flash`, temperature 0, three identical runs), changing only gate
+A's wording moved the answer from `inject = 0.151` to `0.862`. Below `decision.threshold` that
+difference is a silent no-inject: `recall.mode: "decision"` looks healthy and recalls nothing.
+Small models follow the text literally, so the text is a control surface, not decoration.
+
+| Placeholder     | Substituted with                                                  | Gates       |
+| --------------- | ----------------------------------------------------------------- | ----------- |
+| `{bank}`        | The bank's config `id`                                            | read, write |
+| `{description}` | The bank's `description`, or `no description provided` when unset | read, write |
+| `{access}`      | The bank's `access` (`read`, `write`, or `read-write`)            | read, write |
+
+Read and write questions are rendered per candidate bank, so each question the model sees names the
+bank it is about and carries that bank's own description and access. An unset `description` is
+spelled out rather than left empty, so the model reads "this bank says nothing about itself"
+instead of interpreting a blank slot.
+
+````jsonc
+{
+  "decision": {
+    "instructions": {
+      "inject": "Decide whether this turn injects a block of memories recalled from past sessions before the answer is generated. Default to no.",
+      "read": "Decide whether automatic recall reads bank \"{bank}\" this turn. That bank holds: {description}.",
+      "write": "Decide whether this turn's memory is retained into bank \"{bank}\". That bank holds: {description}."
+    }
+  }
+}
+
+An empty or whitespace-only string falls back to the built-in default for that gate, so a config
+cannot mute a gate by blanking it.
+
+**When you swap judge models, tune here first.** Model calibration differs — a local small model and
+a cloud decider do not read the same sentence the same way. Adjust `decision.instructions` (and
+`decision.threshold`) before changing any code; both are config precisely so that model changes do
+not require a release.
+
+### Writing bank descriptions
+
+`banks[].description` is shown to the decision model when it picks banks. Describe **what the bank
+holds**, in plain content terms. Access and write policy belong in `access` and `retain.mode`, not
+in the description.
+
+A description carrying policy text degrades bank selection: measured on the same local judge,
+changing one bank's description from `"Read-only for agents; never auto-retained into."` to a plain
+content description moved `read:agent-global-stable` from `0.477` to `0.648`. A policy sentence
+asks the model to reason about permissions it cannot verify; a content sentence lets it match the
+turn against what the bank actually contains.
+
+```jsonc
+// Better: what the bank holds.
+{ "id": "coding", "description": "This repo's architecture, tasks, decisions, and constraints" }
+
+// Worse: policy the model cannot verify, and `access` already says it.
+{ "id": "coding", "description": "Read-only for agents; never auto-retained into." }
+````
 
 **Routing rules.** Only enabled, access-compatible banks are offered: read routing skips `write`
 entries, write routing skips `read` entries, and a bank id the model returns that was not offered

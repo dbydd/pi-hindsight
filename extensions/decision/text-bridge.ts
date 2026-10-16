@@ -1,5 +1,6 @@
 import { coerceBoolean } from "./backends.js";
 import { isRecord } from "../config/is-record.js";
+import { DEFAULT_DECISION_THRESHOLD } from "../types.js";
 import { DecisionAnswerError } from "./errors.js";
 import type { DecisionAnswers, DecisionBackend, DecisionQuestion } from "./types.js";
 
@@ -64,13 +65,14 @@ export function renderTextPrompt(
 export function parseTextAnswers(
   text: string,
   ids: readonly string[],
+  threshold: number = DEFAULT_DECISION_THRESHOLD,
 ): DecisionAnswers | undefined {
   const payload = extractJsonObject(text);
   if (!payload) return undefined;
   const source = isRecord(payload.answers) ? payload.answers : payload;
   const answers: DecisionAnswers = {};
   for (const id of ids) {
-    const value = coerceBoolean(source[id]);
+    const value = coerceBoolean(source[id], threshold);
     if (value === undefined) return undefined;
     answers[id] = value;
   }
@@ -95,7 +97,7 @@ export function createTextBridgeBackend(
           ...(options.maxTokens !== undefined ? { maxTokens: options.maxTokens } : {}),
           ...(options.signal ? { signal: options.signal } : {}),
         });
-        const answers = parseTextAnswers(lastReply, ids);
+        const answers = parseTextAnswers(lastReply, ids, options.threshold);
         if (answers) return answers;
       }
       throw new DecisionAnswerError(

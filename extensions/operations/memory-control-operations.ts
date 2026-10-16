@@ -33,6 +33,10 @@ export const AGENT_CONFIG_ALLOWLIST = [
   "recallEnabled",
   "recallBudget",
   "recallMaxTokens",
+  "decisionInstructionsInject",
+  "decisionInstructionsRead",
+  "decisionInstructionsWrite",
+  "decisionThreshold",
   "retainEnabled",
   "baseUrl",
   "apiKeyEnvVar",
@@ -75,6 +79,10 @@ export function agentConfigView(config: ResolvedConfig): Record<AgentConfigKey, 
     recallEnabled: config.recall.enabled,
     recallBudget: config.recall.budget,
     recallMaxTokens: config.recall.maxTokens,
+    decisionInstructionsInject: config.decision.instructions.inject,
+    decisionInstructionsRead: config.decision.instructions.read,
+    decisionInstructionsWrite: config.decision.instructions.write,
+    decisionThreshold: config.decision.threshold,
     retainEnabled: config.retain.enabled,
     baseUrl: config.hindsight.baseUrl,
     apiKeyEnvVar: config.hindsight.apiKeyRef?.startsWith("env:")
@@ -101,11 +109,19 @@ const BOOLEAN_KEYS = new Set<AgentConfigKey>([
   "retainEnabled",
 ]);
 
-const NUMBER_KEYS = new Set<AgentConfigKey>(["recallMaxTokens", "timeoutMs"]);
+const NUMBER_KEYS = new Set<AgentConfigKey>(["recallMaxTokens", "decisionThreshold", "timeoutMs"]);
 
 const STRING_ARRAY_KEYS = new Set<AgentConfigKey>(["userScopeTags"]);
 
 function assertAgentConfigValue(key: AgentConfigKey, value: unknown): unknown {
+  // A probability outside 0-1 is not a usable decision point, unlike the other
+  // numbers here where any non-negative value is a legitimate budget.
+  if (key === "decisionThreshold") {
+    if (typeof value !== "number" || !Number.isFinite(value) || value < 0 || value > 1) {
+      throw new Error("Config field decisionThreshold must be a number between 0 and 1");
+    }
+    return value;
+  }
   if (BOOLEAN_KEYS.has(key)) {
     if (typeof value !== "boolean") {
       throw new Error(`Config field ${key} must be a boolean`);

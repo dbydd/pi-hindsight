@@ -1,10 +1,11 @@
 import { bankEntryEnabled, bankEntryFor, canReadBank, canWriteBank } from "../config/banks.js";
 import { recallTurnCacheKey } from "../lifecycle/memory-lifecycle-recall.js";
 import type { RetrievalObserver } from "../lifecycle/retrieval-telemetry.js";
-import type { BankConfigEntry, ResolvedConfig } from "../types.js";
+import type { BankConfigEntry, DecisionInstructions, ResolvedConfig } from "../types.js";
 import { createDecisionCache } from "./cache.js";
 import { buildDecisionState } from "./context.js";
 import { defaultMaxContextChars } from "./context-budget.js";
+import { MISSING_DESCRIPTION, renderInstruction } from "./instructions.js";
 import { DecisionAnswerError, DecisionTimeoutError } from "./errors.js";
 import { resolveDecisionModel } from "./model.js";
 import { decisionFailure, emitDecision } from "./telemetry.js";
@@ -66,7 +67,11 @@ export function createDecisionLayer(deps: DecisionLayerDeps): DecisionLayer {
       if (!config.enabled || !settings.enabled) return fallback("disabled");
       if (request.signal?.aborted) return fallback("aborted");
 
-      const questions = buildQuestions(request.readCandidates, request.writeCandidates);
+      const questions = buildQuestions(
+        request.readCandidates,
+        request.writeCandidates,
+        settings.instructions,
+      );
       if (questions.length === 0) {
         emitDecision(deps.observer, started, {
           status: "skipped",
@@ -134,6 +139,7 @@ export function createDecisionLayer(deps: DecisionLayerDeps): DecisionLayer {
               backend.answer(questions, state, {
                 signal,
                 ...(settings.maxTokens > 0 ? { maxTokens: settings.maxTokens } : {}),
+                threshold: settings.threshold,
               }),
             settings.timeoutMs,
             request.signal,
@@ -177,24 +183,35 @@ export function createDecisionLayer(deps: DecisionLayerDeps): DecisionLayer {
 function buildQuestions(
   readCandidates: readonly DecisionBankCandidate[],
   writeCandidates: readonly DecisionBankCandidate[],
+  instructions: DecisionInstructions,
 ): DecisionQuestion[] {
   const questions: DecisionQuestion[] = [];
   if (readCandidates.length > 0) {
     questions.push({
       id: INJECT_QUESTION_ID,
-      instructions: "This turn must inject automatic memory recall before the answer is generated.",
+      instructions: instructions.inject,
     });
   }
   for (const candidate of readCandidates) {
     questions.push({
       id: `${READ_QUESTION_PREFIX}${candidate.id}`,
-      instructions: `Automatic recall should read bank "${candidate.id}" for this turn.`,
+      // An unset description is spelled out, so the model reads "this bank says
+      // nothing about itself" rather than an empty slot it has to interpret.
+      instructions: renderInstruction(instructions.read, {
+        bank: candidate.id,
+        description: candidate.description?.trim() || MISSING_DESCRIPTION,
+        access: candidate.access,
+      }),
     });
   }
   for (const candidate of writeCandidates) {
     questions.push({
       id: `${WRITE_QUESTION_PREFIX}${candidate.id}`,
-      instructions: `Retaining this turn's memory should write to bank "${candidate.id}".`,
+      instructions: renderInstruction(instructions.write, {
+        bank: candidate.id,
+        description: candidate.description?.trim() || MISSING_DESCRIPTION,
+        access: candidate.access,
+      }),
     });
   }
   return questions;

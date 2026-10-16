@@ -1,4 +1,6 @@
+import { DEFAULT_DECISION_INSTRUCTIONS } from "../decision/instructions.js";
 import type { ResolvedConfig } from "../types.js";
+import { DEFAULT_DECISION_THRESHOLD } from "../types.js";
 
 import { hostConfigDirName } from "./paths.js";
 
@@ -39,6 +41,8 @@ export const DEFAULT_CONFIG: ResolvedConfig = {
     // Final fallback when neither a hand-written value nor a resolved model
     // supplies a budget; see DecisionConfig.maxContextChars.
     maxContextChars: 32_768,
+    instructions: DEFAULT_DECISION_INSTRUCTIONS,
+    threshold: DEFAULT_DECISION_THRESHOLD,
     maxContextCharsWritten: false,
     cacheTtlMs: 60_000,
     fallback: { recallBanks: [], retainBanks: [] },

@@ -35,6 +35,11 @@ export interface DecisionBackendOptions {
    * `decision.maxTokens <= 0` in config, which is the "no ceiling" setting.
    */
   maxTokens?: number;
+  /**
+   * Probability at or above which a numeric answer counts as "yes" —
+   * `decision.threshold`, threaded so every backend coerces at the same point.
+   */
+  threshold?: number;
 }
 
 /**

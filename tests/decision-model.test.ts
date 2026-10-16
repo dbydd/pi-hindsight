@@ -529,6 +529,24 @@ describe("answer coercion", () => {
     expect(coerceBoolean(null)).toBeUndefined();
   });
 
+  it("uses the default 0.5 threshold when none is passed", () => {
+    expect(coerceBoolean(0.5)).toBe(true);
+    expect(coerceBoolean(0.499)).toBe(false);
+  });
+
+  it("moves the yes point with a configured threshold", () => {
+    // A stricter gate: a weak probability is no longer a yes.
+    expect(coerceBoolean(0.6, 0.9)).toBe(false);
+    expect(coerceBoolean(0.9, 0.9)).toBe(true);
+    // A looser gate: a weak probability now counts.
+    expect(coerceBoolean(0.3, 0.2)).toBe(true);
+  });
+
+  it("applies the threshold inside a nested answer object", () => {
+    expect(coerceBoolean({ type: "noul", noul: 0.7 }, 0.9)).toBe(false);
+    expect(coerceBoolean({ type: "noul", noul: 0.95 }, 0.9)).toBe(true);
+  });
+
   it("keeps an unanswered question undefined instead of guessing", async () => {
     const backend = createJudgeBackend({
       judge: { judge: async () => ({ answers: { inject: { noul: 0.9 } } }) },
