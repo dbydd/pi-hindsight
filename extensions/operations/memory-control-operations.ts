@@ -4,6 +4,7 @@ import { resolveOperationBank } from "../banks/bank-selection.js";
 import { buildStatusFields } from "../utils/status-fields.js";
 import type { MemoryOperationsDeps } from "./memory-operation-types.js";
 import { isMemorySetupComplete, setupRequiredMessage } from "../config/setup-gate.js";
+import { readHostMemoryBackend } from "../config/omp-config.js";
 import { configureMemory, type ProjectConfigPatchInput } from "../config/config-writer.js";
 import { seedKnowledgePages } from "../banks/knowledge-page-seed.js";
 import type { BankConfigEntry, HindsightLikeClient, ResolvedConfig, TagsMatch } from "../types.js";
@@ -271,12 +272,15 @@ export function createControlOperations(deps: MemoryOperationsDeps) {
         client: deps.getClient(),
         bankId: deps.getProjectBankId(),
       });
+      const hostMemoryBackend =
+        (await deps.getHostMemoryBackend?.()) ?? (await readHostMemoryBackend());
       return {
         setupComplete: isMemorySetupComplete(config, cwd),
         ...(isMemorySetupComplete(config, cwd) ? {} : { setupHint: setupRequiredMessage() }),
         project: resolveProjectIdentity(cwd, config),
         fields,
         sync,
+        hostMemoryBackend,
       };
     },
 

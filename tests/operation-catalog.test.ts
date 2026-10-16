@@ -703,10 +703,11 @@ describe("operation catalog", () => {
       "hindsight_scope_migrate",
     ]);
 
-    // Human surface is TUI-first: hub + next-opt-out slash command.
+    // Human surface is TUI-first: hub + next-opt-out and omp-backend slash commands.
     expect(catalog.commands.map((command) => command.name)).toEqual([
       "hindsight",
       "hindsight:next-opt-out",
+      "hindsight:omp-backend",
     ]);
   });
 });

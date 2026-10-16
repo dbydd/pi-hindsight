@@ -25,7 +25,7 @@ function client(overrides: Partial<HindsightLikeClient> = {}): HindsightLikeClie
 }
 
 describe("hindsight public command surface", () => {
-  it("registers only the /hindsight TUI hub command", () => {
+  it("registers the public TUI-first command surface", () => {
     const commands = new Map<string, RegisteredTestCommand>();
     const catalog = createOperationCatalog({
       getClient: () => client(),
@@ -41,9 +41,14 @@ describe("hindsight public command surface", () => {
       catalog,
     );
 
-    expect([...commands.keys()].sort()).toEqual(["hindsight", "hindsight:next-opt-out"]);
+    expect([...commands.keys()].sort()).toEqual([
+      "hindsight",
+      "hindsight:next-opt-out",
+      "hindsight:omp-backend",
+    ]);
     expect(commands.get("hindsight")?.handler).toBeTypeOf("function");
     expect(commands.get("hindsight:next-opt-out")?.handler).toBeTypeOf("function");
+    expect(commands.get("hindsight:omp-backend")?.handler).toBeTypeOf("function");
   });
 
   it("catalog command list matches the public TUI-first surface", () => {
@@ -55,6 +60,7 @@ describe("hindsight public command surface", () => {
     expect(catalog.commands.map((command) => command.name)).toEqual([
       "hindsight",
       "hindsight:next-opt-out",
+      "hindsight:omp-backend",
     ]);
     // Demoted slash commands must not reappear as public registrations.
     for (const demoted of [

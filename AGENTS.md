@@ -282,6 +282,7 @@ Human surface (thin TUI):
 
 - `/hindsight` hub: status, guided setup, emergencies (mode, next-opt-out, flush, doctor); import/templates/advanced demoted
 - `/hindsight:next-opt-out` (skip automatic retain for the next agent run)
+- `/hindsight:omp-backend` (show/switch omp's built-in memory backend so there is one memory entry point)
 
 ## Implementation priorities
 

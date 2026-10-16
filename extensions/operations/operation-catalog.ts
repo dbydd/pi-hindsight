@@ -8,8 +8,17 @@ import type { MemoryOperations, MemoryOperationsDeps } from "./memory-operation-
 import { formatReflectResult } from "./reflect-presenter.js";
 import { toolPresentation } from "./tool-presentation.js";
 import { renderMemoryToolTextResult, retainToolResponse } from "../tui/tool-presenters.js";
+import { CANCEL } from "../tui/setup-tui-types.js";
 import { getSessionFile } from "../utils/session.js";
 import { hostConfigDirName } from "../config/paths.js";
+import {
+  OMP_MEMORY_BACKEND_HINDSIGHT,
+  OMP_MEMORY_BACKEND_KEY,
+  OMP_MEMORY_BACKEND_OFF,
+  readHostMemoryBackend,
+  resetOmpSetting,
+  setOmpSetting,
+} from "../config/omp-config.js";
 
 /**
  * Built per call: the host profile (`.pi` vs `.omp`) is only known once the session
@@ -1305,6 +1314,50 @@ export function createOperationCatalog(deps: MemoryOperationsDeps): OperationCat
           ctx.ui.notify(
             `Hindsight will skip automatic retain for the next agent run in this session. nextRetain=${result.meta.nextRetainMode}`,
             "info",
+          );
+        },
+      },
+    },
+    {
+      name: "hindsight:omp-backend",
+      spec: {
+        description:
+          "Show or switch omp's built-in memory backend so a session keeps one memory entry point.",
+        handler: async (_args, ctx) => {
+          const read = () => deps.getHostMemoryBackend?.() ?? readHostMemoryBackend();
+          const current = await read();
+          if (!current.available) {
+            ctx.ui.notify(
+              current.host === "pi"
+                ? "omp's built-in memory backend does not apply on this host; Pi Hindsight is the only memory surface."
+                : `Could not read omp ${OMP_MEMORY_BACKEND_KEY}; run \`omp config get ${OMP_MEMORY_BACKEND_KEY}\` manually.`,
+              "warning",
+            );
+            return;
+          }
+          const state = `${OMP_MEMORY_BACKEND_KEY}=${current.backend}${current.redundant ? " (redundant second memory entry point)" : ""}`;
+          const choice = await ctx.ui.select(`omp built-in memory backend — ${state}`, [
+            OMP_MEMORY_BACKEND_OFF,
+            OMP_MEMORY_BACKEND_HINDSIGHT,
+            CANCEL,
+          ]);
+          if (!choice || choice === CANCEL) return;
+          // "off" resets so omp's default (`off`) applies; "hindsight" turns its built-in on.
+          const write =
+            choice === OMP_MEMORY_BACKEND_HINDSIGHT
+              ? await setOmpSetting(OMP_MEMORY_BACKEND_KEY, OMP_MEMORY_BACKEND_HINDSIGHT)
+              : await resetOmpSetting(OMP_MEMORY_BACKEND_KEY);
+          if (!write.ok) {
+            ctx.ui.notify(
+              `Failed to update omp ${OMP_MEMORY_BACKEND_KEY}: ${write.error}`,
+              "error",
+            );
+            return;
+          }
+          const verified = await read();
+          ctx.ui.notify(
+            `omp ${OMP_MEMORY_BACKEND_KEY} → ${verified.backend ?? OMP_MEMORY_BACKEND_OFF}; redundant=${verified.redundant}. Pi Hindsight owns memory on both hosts.`,
+            verified.redundant ? "warning" : "info",
           );
         },
       },

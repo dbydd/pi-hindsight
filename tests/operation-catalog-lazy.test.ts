@@ -52,6 +52,7 @@ it("registers the shared catalog through the extension entrypoint", () => {
   expect(pi.registerCommand.mock.calls.map(([name]) => name)).toEqual([
     "hindsight",
     "hindsight:next-opt-out",
+    "hindsight:omp-backend",
   ]);
   expect(mocked.createMemoryOperations).not.toHaveBeenCalled();
 });
