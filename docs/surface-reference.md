@@ -166,7 +166,7 @@ Read the effective allowlisted Pi Hindsight config values plus the allowlist; se
 
 ### `hindsight_config_set`
 
-Patch allowlisted Pi Hindsight config (project or global file) with typed keys only: setupComplete, scopeMode, projectId, projectIdStrategy, includeSharedObservations, userScopeTags, projectBankId, enableGlobalBank, globalBankId, agentUse, mentalModelsInject, memoryProfile, recall/retain knobs, baseUrl, apiKeyEnvVar, timeoutMs. dryRun defaults true (preview) — set false to write. Domain-tagged setupComplete requires projectBankId. Never pass raw API keys — use apiKeyEnvVar. Read current values with hindsight_config_get first.
+Patch allowlisted Pi Hindsight config (project or global file) with typed keys only: setupComplete, scopeMode, projectId, projectIdStrategy, includeSharedObservations, userScopeTags, projectBankId, enableGlobalBank, globalBankId, agentUse, mentalModelsInject, memoryProfile, recall/retain knobs, decision instruction text (decisionInstructionsInject/Read/Write, with {bank}/{description}/{access} placeholders) and decisionThreshold, baseUrl, apiKeyEnvVar, timeoutMs. dryRun defaults true (preview) — set false to write. Domain-tagged setupComplete requires projectBankId. Never pass raw API keys — use apiKeyEnvVar. Read current values with hindsight_config_get first.
 
 | Parameter | Type              | Required | Description                                                      |
 | --------- | ----------------- | -------- | ---------------------------------------------------------------- |

@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { resolveConfig } from "../extensions/config/config.js";
 import { DEFAULT_CONFIG } from "../extensions/config/config-defaults.js";
+import { DEFAULT_DECISION_INSTRUCTIONS } from "../extensions/decision/instructions.js";
 import { normalizeConfig } from "../extensions/config/config-normalize.js";
 import type { ResolvedConfig } from "../extensions/types.js";
 
@@ -28,6 +29,8 @@ describe("decision config normalization", () => {
       maxTokens: 4_096,
       timeoutMs: Number.POSITIVE_INFINITY,
       maxContextChars: 32_768,
+      instructions: DEFAULT_DECISION_INSTRUCTIONS,
+      threshold: 0.5,
       maxContextCharsWritten: false,
       cacheTtlMs: 60_000,
       fallback: { recallBanks: [], retainBanks: [] },
@@ -99,6 +102,32 @@ describe("decision config normalization", () => {
       maxContextChars: DEFAULT_CONFIG.decision.maxContextChars,
       maxContextCharsWritten: false,
     });
+  });
+
+  it("defaults the threshold to 0.5 and keeps a written one", () => {
+    expect(normalize(undefined).decision.threshold).toBe(0.5);
+    expect(normalize({ threshold: 0.9 }).decision.threshold).toBe(0.9);
+    expect(normalize({ threshold: 0 }).decision.threshold).toBe(0);
+    expect(normalize({ threshold: 1 }).decision.threshold).toBe(1);
+  });
+
+  it("falls back to the default threshold for values outside 0-1", () => {
+    for (const value of [-0.1, 1.1, Number.NaN, "0.9", null, undefined]) {
+      expect(normalize({ threshold: value }).decision.threshold).toBe(0.5);
+    }
+  });
+
+  it("keeps instruction text and threshold from a project config layer", () => {
+    const cwd = repo({
+      banks: [{ id: "coding", alias: "project", bankId: "coding-bank" }],
+      decision: {
+        instructions: { inject: "Only ask when the user names memory." },
+        threshold: 0.75,
+      },
+    });
+    const config = resolveConfig(cwd, { ...process.env, HOME: tmpdir() });
+    expect(config.decision.instructions.inject).toBe("Only ask when the user names memory.");
+    expect(config.decision.threshold).toBe(0.75);
   });
 
   it("drops fallback bank ids that are not configured and dedupes them", () => {

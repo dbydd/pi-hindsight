@@ -151,6 +151,10 @@ export interface ProjectConfigPatchInput {
   recallEnabled?: boolean;
   recallBudget?: "low" | "mid" | "high";
   recallMaxTokens?: number;
+  decisionInstructionsInject?: string;
+  decisionInstructionsRead?: string;
+  decisionInstructionsWrite?: string;
+  decisionThreshold?: number;
   recallUserMaxTokens?: number;
   recallStoreLast?: boolean;
   recallStoreFailures?: boolean;
@@ -214,6 +218,29 @@ export function buildProjectConfigPatch(input: ProjectConfigPatchInput): Record<
     throw new Error(
       "directApiKey can only be written to user config; use apiKeyEnvVar for project config",
     );
+  }
+  if (
+    input.decisionInstructionsInject !== undefined ||
+    input.decisionInstructionsRead !== undefined ||
+    input.decisionInstructionsWrite !== undefined ||
+    input.decisionThreshold !== undefined
+  ) {
+    // One `instructions` object, so a patch carrying two of the three gates
+    // writes both instead of the last spread winning.
+    const instructions: Record<string, string> = {};
+    if (input.decisionInstructionsInject !== undefined) {
+      instructions.inject = input.decisionInstructionsInject;
+    }
+    if (input.decisionInstructionsRead !== undefined) {
+      instructions.read = input.decisionInstructionsRead;
+    }
+    if (input.decisionInstructionsWrite !== undefined) {
+      instructions.write = input.decisionInstructionsWrite;
+    }
+    patch.decision = {
+      ...(Object.keys(instructions).length > 0 ? { instructions } : {}),
+      ...(input.decisionThreshold !== undefined ? { threshold: input.decisionThreshold } : {}),
+    };
   }
   if (input.baseUrl || input.timeoutMs !== undefined || input.apiKeyEnvVar || input.directApiKey) {
     patch.hindsight = {

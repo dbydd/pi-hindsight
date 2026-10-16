@@ -117,6 +117,31 @@
           "description": "Character budget for the recent-activity part of the prompt. When unset, the budget is derived from the resolved model's context window."
         },
         "cacheTtlMs": { "type": "integer" },
+        "threshold": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1,
+          "description": "Probability at or above which a backend's numeric answer counts as yes. Default 0.5. Local models and cloud deciders calibrate differently, so tune this when you swap judge models."
+        },
+        "instructions": {
+          "type": "object",
+          "description": "Question text for the three gates. Tune this first when you change judge models; the defaults are written to say what each gate controls, which state fields matter, and which way to lean on an ambiguous turn.",
+          "properties": {
+            "inject": {
+              "type": "string",
+              "description": "Gate A: whether this turn injects recall. No placeholders."
+            },
+            "read": {
+              "type": "string",
+              "description": "Gate B read: whether recall reads one bank. Placeholders: {bank}, {description}, {access}."
+            },
+            "write": {
+              "type": "string",
+              "description": "Gate B write: whether retain writes to one bank. Placeholders: {bank}, {description}, {access}."
+            }
+          },
+          "additionalProperties": true
+        },
         "fallback": {
           "type": "object",
           "properties": {
@@ -216,7 +241,7 @@
         },
         "description": {
           "type": "string",
-          "description": "Shown to the decision model when it picks banks."
+          "description": "What this bank holds, in plain terms. Shown to the decision model when it picks banks. Do not write access or write policy here — express those with `access` and `retain.mode`; a description that carries policy text measurably degrades bank selection."
         },
         "mission": {
           "type": "object",

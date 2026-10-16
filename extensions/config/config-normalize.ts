@@ -174,6 +174,7 @@ function scoreFloors(value: unknown): RecallMinScores | undefined {
 function decisionConfig(value: unknown, banks: BankConfigEntry[]): DecisionConfig {
   const raw = isRecord(value) ? value : {};
   const fallback = isRecord(raw.fallback) ? raw.fallback : {};
+  const instructions = isRecord(raw.instructions) ? raw.instructions : {};
   // A usable written number is kept; everything else (missing, non-integer,
   // non-positive) falls through to the model-derived budget in decision.ts.
   const writtenContextChars =
@@ -190,6 +191,15 @@ function decisionConfig(value: unknown, banks: BankConfigEntry[]): DecisionConfi
     // Non-positive is a setting, not an error: it normalizes to "no timer".
     timeoutMs: normalizeTimeoutMs(raw.timeoutMs, DEFAULT_CONFIG.decision.timeoutMs),
     maxContextChars: writtenContextChars ?? DEFAULT_CONFIG.decision.maxContextChars,
+    // A blank written string is not a setting: it would mute the gate, so it
+    // falls back to the built-in default instead.
+    instructions: {
+      inject: writtenText(instructions.inject, DEFAULT_CONFIG.decision.instructions.inject),
+      read: writtenText(instructions.read, DEFAULT_CONFIG.decision.instructions.read),
+      write: writtenText(instructions.write, DEFAULT_CONFIG.decision.instructions.write),
+    },
+    // A probability outside 0-1 is unusable, not a setting; the default stands.
+    threshold: probability(raw.threshold, DEFAULT_CONFIG.decision.threshold),
     maxContextCharsWritten: writtenContextChars !== undefined,
     cacheTtlMs: positiveInt(raw.cacheTtlMs, DEFAULT_CONFIG.decision.cacheTtlMs),
     fallback: {
@@ -202,6 +212,18 @@ function decisionConfig(value: unknown, banks: BankConfigEntry[]): DecisionConfi
 /** A written integer, or the fallback for anything that is not one. */
 function intOr(value: unknown, fallback: number): number {
   return typeof value === "number" && Number.isInteger(value) ? value : fallback;
+}
+
+/** A non-empty string, or the fallback for a missing or blank one. */
+function writtenText(value: unknown, fallback: string): string {
+  return typeof value === "string" && value.trim().length > 0 ? value : fallback;
+}
+
+/** A finite number in [0, 1], or the fallback for anything else. */
+function probability(value: unknown, fallback: number): number {
+  return typeof value === "number" && Number.isFinite(value) && value >= 0 && value <= 1
+    ? value
+    : fallback;
 }
 
 /**
