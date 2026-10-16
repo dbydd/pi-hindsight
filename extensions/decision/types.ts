@@ -30,7 +30,11 @@ export type DecisionAnswers = Record<string, boolean | undefined>;
 
 export interface DecisionBackendOptions {
   signal?: AbortSignal;
-  maxTokens: number;
+  /**
+   * Output budget. Omitted (or `<= 0`) means the backend keeps its own cap —
+   * `decision.maxTokens <= 0` in config, which is the "no ceiling" setting.
+   */
+  maxTokens?: number;
 }
 
 /**
@@ -140,6 +144,12 @@ export interface DecisionHost {
    * spec cannot be resolved, so the default config still yields a model.
    */
   sessionModel?(): DecisionModelRef | undefined;
+  /**
+   * The resolved model's context window in tokens, or `undefined` when the host
+   * reports none. The decision layer derives its prompt budget from it, so a
+   * host that cannot answer costs budget size, never the turn.
+   */
+  modelContextWindow?(ref: DecisionModelRef): number | undefined;
   /** Ordered ladder for a ref: first rung that answers wins, later rungs cover failures. */
   backends(ref: DecisionModelRef): DecisionBackend[];
 }

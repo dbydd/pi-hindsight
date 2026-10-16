@@ -12,9 +12,25 @@ Config is loaded from:
 2. `hindsight.json` or `hindsight.jsonc` in the host's project config dir (`.pi` under Pi, `.omp` under omp)
 3. environment variables
 
-If both `.json` and `.jsonc` exist at the same scope, `.json` wins. Config is normalized after merging. Unknown fields are ignored, and invalid values fall back to defaults.
+If both `.json` and `.jsonc` exist at the same scope, `.json` wins. Config is normalized after merging. Unknown fields are ignored, and invalid values fall back to defaults. Comments and trailing commas are accepted in **both** suffixes: the reader parses every config file as JSONC, so `hindsight.json` may carry `//` lines too.
 
 Environment variables win the effective value. Project/user stored values can still be edited for future runs after the environment override is removed.
+
+## `$schema`
+
+The first time guided setup or the memory tools write a config file, the file starts with a
+`$schema` line pointing at this package's published schema:
+
+```jsonc
+{
+  "$schema": "https://raw.githubusercontent.com/dbydd/pi-hindsight/main/schemas/hindsight.schema.json",
+  "banks": [{ "id": "coding", "alias": "project", "bankId": "pi-project-my-repo" }],
+}
+```
+
+It is an editor hint only — it buys completion and validation for the `banks[]` entries, which are
+the most hand-written part of a config. The loader ignores the key, and deleting the line changes
+nothing. Existing files are never rewritten to add it.
 
 ## Host config paths
 
@@ -222,7 +238,7 @@ Paths below are Pi's resolved defaults; see [Host config paths](#host-config-pat
   "banksFallback": ["coding"],
   "decision": {
     "model": "role:judge",
-    "timeoutMs": 3000,
+    "timeoutMs": -1,
     "fallback": { "recallBanks": ["coding"], "retainBanks": ["coding"] }
   },
   "recall": {
@@ -396,9 +412,8 @@ banks, retain at agent end with the write candidates — and each call is cached
   "decision": {
     "enabled": true,
     "model": "role:judge",
-    "maxTokens": 200,
-    "timeoutMs": 3000,
-    "maxContextChars": 6000,
+    "maxTokens": 4096,
+    "timeoutMs": -1,
     "cacheTtlMs": 60000,
     "fallback": { "recallBanks": ["coding"], "retainBanks": ["coding"] },
   },
@@ -409,11 +424,25 @@ banks, retain at agent end with the write candidates — and each call is cached
 | -------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `enabled`                              | When false the layer decides nothing and the memory paths keep their own bank selection.                                                                    |
 | `model`                                | `role:<name>` on a host that has model roles, or `<provider>/<modelId>` on every host. A role spec on a host without roles falls back to the session model. |
-| `maxTokens`                            | Answer budget for backends that accept one.                                                                                                                 |
-| `timeoutMs`                            | Per-attempt budget. A backend that exceeds it is abandoned and the next one is tried.                                                                       |
-| `maxContextChars`                      | Budget for the recent-activity part of the prompt. The last user message and the task state are always included.                                            |
+| `maxTokens`                            | Output cap per answer. `<= 0` means no cap: the field is left off the backend call and the transport keeps its own.                                         |
+| `timeoutMs`                            | Per-attempt budget in milliseconds. `<= 0` arms no timer, so only the caller's own signal can stop the call.                                                |
+| `maxContextChars`                      | Character budget for the recent-activity part of the prompt. The last user message and the task state are always included.                                  |
 | `cacheTtlMs`                           | Reuse window for a decision, keyed by the offered bank ids (tagged per path) and the last user message content.                                             |
 | `fallback.recallBanks` / `retainBanks` | Bank ids used when no backend answers. Empty means the top-level `banksFallback` list. Unknown ids are dropped at load time.                                |
+
+**Budgets.** `maxTokens` bounds only the answer, not the prompt, so it does not constrain the
+model's context window; the default of 4096 sits above the 1024-token minimum thinking budget that
+Anthropic-dialect proxies enforce, which a 200-token cap would trip on every call. `timeoutMs`
+defaults to no timer: an api can run on any machine at any speed, and a local timer only aborts work
+that would otherwise have answered.
+
+`maxContextChars` is the one input-side number, and its effective value is:
+
+1. the hand-written config value, when the file carries a usable positive integer;
+2. otherwise the value derived from the resolved decision model — a quarter of its `contextWindow`
+   in tokens, clamped to 2k–12k tokens, times 4 characters per token (8192 chars for a 32k model,
+   48000 chars for a 200k+ model, 8192 chars for a model that reports no window);
+3. otherwise the built-in default of 32768 characters.
 
 **Context.** The prompt carries the last user message, the host task state (`unknown` when it
 cannot be read, never "no tasks"), the recent activity that fits the budget, and every candidate

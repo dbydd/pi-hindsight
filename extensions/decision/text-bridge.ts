@@ -21,7 +21,8 @@ export interface TextCompleteInput {
   user: string;
   retry?: boolean;
   signal?: AbortSignal;
-  maxTokens: number;
+  /** Omitted means the transport keeps its own output cap. */
+  maxTokens?: number;
 }
 
 /** Completes one rendered prompt; throws on transport failure. */
@@ -91,7 +92,7 @@ export function createTextBridgeBackend(
         const prompt = renderTextPrompt(questions, state, attempt > 0);
         lastReply = await port({
           ...prompt,
-          maxTokens: options.maxTokens,
+          ...(options.maxTokens !== undefined ? { maxTokens: options.maxTokens } : {}),
           ...(options.signal ? { signal: options.signal } : {}),
         });
         const answers = parseTextAnswers(lastReply, ids);

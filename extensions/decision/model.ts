@@ -43,6 +43,12 @@ export interface ResolvedDecisionModel {
   /** Ordered ladder for the ref; the caller tries rungs in order. */
   backends: DecisionBackend[];
   source: DecisionModelSource;
+  /**
+   * The resolved model's context window in tokens, when the host reports one.
+   * The caller derives its prompt budget from it; `undefined` means the host
+   * carries no usable figure and the fallback applies.
+   */
+  contextWindow?: number;
 }
 
 export interface ResolveDecisionModelInput {
@@ -108,7 +114,20 @@ export async function resolveDecisionModel(
     emitDecision(observer, started, { status: "skipped", reason: "no-backend", model });
     return undefined;
   }
-  return { ref, backends, source };
+  const window = contextWindow(input.host, ref);
+  return { ref, backends, source, ...(window === undefined ? {} : { contextWindow: window }) };
+}
+
+/**
+ * The resolved model's context window, read through the host registry. Both
+ * hosts keep it on the catalogued model (`contextWindow`), and a host that
+ * reports none simply leaves it unset so the caller falls back.
+ */
+function contextWindow(host: DecisionHost, ref: DecisionModelRef): number | undefined {
+  const reported = host.modelContextWindow?.(ref);
+  return typeof reported === "number" && Number.isFinite(reported) && reported > 0
+    ? reported
+    : undefined;
 }
 
 function safeBackends(host: DecisionHost, ref: DecisionModelRef): DecisionBackend[] {

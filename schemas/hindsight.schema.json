@@ -1,0 +1,264 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://raw.githubusercontent.com/dbydd/pi-hindsight/main/schemas/hindsight.schema.json",
+  "title": "Pi Hindsight configuration",
+  "description": "Configuration for the pi-hindsight extension. Both `hindsight.json` and `hindsight.jsonc` are read, and comments and trailing commas are accepted in either.",
+  "type": "object",
+  "properties": {
+    "$schema": {
+      "type": "string",
+      "description": "Optional editor hint pointing at this schema. Safe to delete."
+    },
+    "enabled": {
+      "type": "boolean",
+      "description": "Master switch for the extension."
+    },
+    "setupComplete": {
+      "type": "boolean",
+      "description": "When true, automatic memory network I/O is allowed."
+    },
+    "scope": {
+      "type": "object",
+      "properties": {
+        "mode": {
+          "enum": ["domain-tagged", "isolated-bank"],
+          "description": "domain-tagged: shared coding bank plus project tags. isolated-bank: path-derived or dedicated bank per repo."
+        },
+        "projectId": {
+          "type": "string",
+          "description": "Explicit project id pin. Written as the tag project:<slug>."
+        },
+        "projectIdStrategy": {
+          "enum": ["remote", "basename"],
+          "description": "How the project id is derived when projectId is unset: remote = git origin URL, basename = git root folder name."
+        },
+        "includeSharedObservations": {
+          "type": "boolean",
+          "description": "When true, project recall ORs exact untagged (shared) observations with the project tag filter. Not cross-bank."
+        },
+        "userScopeTags": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "User/life bank recall tags (any_strict). Empty array means no tag filter."
+        }
+      },
+      "additionalProperties": true
+    },
+    "hindsight": {
+      "type": "object",
+      "properties": {
+        "baseUrl": { "type": "string" },
+        "timeoutMs": { "type": "integer" },
+        "apiKey": {
+          "description": "Either a SecretRef object ({ source: \"env\", name: \"VAR\" }) or a literal key string. Prefer the env form.",
+          "oneOf": [
+            {
+              "type": "object",
+              "properties": {
+                "source": { "enum": ["env"] },
+                "name": { "type": "string" }
+              },
+              "required": ["source", "name"],
+              "additionalProperties": false
+            },
+            { "type": "string" }
+          ]
+        },
+        "apiKeyRef": { "type": "string" }
+      },
+      "additionalProperties": true
+    },
+    "agentUse": {
+      "enum": ["coding", "conversation"],
+      "description": "Selects starter mental-model sets."
+    },
+    "mentalModels": {
+      "type": "object",
+      "properties": {
+        "inject": { "type": "boolean" },
+        "maxChars": { "type": "integer" },
+        "cacheTtlMs": { "type": "integer" }
+      },
+      "additionalProperties": true
+    },
+    "banks": {
+      "type": "array",
+      "description": "Ordered bank list. Layers merge by `id`; a new id appends to the tail.",
+      "items": { "$ref": "#/definitions/bankEntry" }
+    },
+    "banksFallback": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "Bank ids used when the decision model fails or returns unusable output. Replaced wholesale per layer."
+    },
+    "decision": {
+      "type": "object",
+      "description": "Model-driven recall-inject gate and bank routing.",
+      "properties": {
+        "enabled": {
+          "type": "boolean",
+          "description": "When false the layer decides nothing and the memory paths keep their own bank selection."
+        },
+        "model": {
+          "type": "string",
+          "description": "role:<name> on a host that has model roles, or <provider>/<modelId> on every host. A role spec on a host without roles falls back to the session model."
+        },
+        "maxTokens": {
+          "type": "integer",
+          "description": "Answer budget for backends that accept one. Values <= 0 mean no cap, and the field is left off the backend call."
+        },
+        "timeoutMs": {
+          "type": "integer",
+          "description": "Per-attempt budget in milliseconds. Values <= 0 arm no timer, so only the caller's own signal can stop the call."
+        },
+        "maxContextChars": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Character budget for the recent-activity part of the prompt. When unset, the budget is derived from the resolved model's context window."
+        },
+        "cacheTtlMs": { "type": "integer" },
+        "fallback": {
+          "type": "object",
+          "properties": {
+            "recallBanks": { "type": "array", "items": { "type": "string" } },
+            "retainBanks": { "type": "array", "items": { "type": "string" } }
+          },
+          "additionalProperties": true
+        }
+      },
+      "additionalProperties": true
+    },
+    "recall": {
+      "type": "object",
+      "properties": {
+        "enabled": { "type": "boolean" },
+        "budget": { "enum": ["low", "mid", "high"] },
+        "maxTokens": { "type": "integer" },
+        "userMaxTokens": { "type": "integer" },
+        "types": { "type": "array", "items": { "type": "string" } },
+        "mode": { "enum": ["every-turn", "decision", "interval", "manual"] },
+        "bankMode": { "enum": ["all", "decision"] }
+      },
+      "additionalProperties": true
+    },
+    "retain": {
+      "type": "object",
+      "properties": {
+        "enabled": { "type": "boolean" },
+        "async": { "type": "boolean" },
+        "delivery": { "enum": ["immediate", "coalesced"] },
+        "updateMode": { "enum": ["append", "replace"] }
+      },
+      "additionalProperties": true
+    },
+    "observations": {
+      "type": "object",
+      "properties": {
+        "enabled": { "type": "boolean" },
+        "scopes": { "type": "array", "items": { "type": "array", "items": { "type": "string" } } }
+      },
+      "additionalProperties": true
+    },
+    "import": {
+      "type": "object",
+      "properties": {
+        "mode": { "enum": ["curated", "raw", "forensic"] },
+        "qualityProfile": { "enum": ["compatible", "strict"] }
+      },
+      "additionalProperties": true
+    },
+    "status": {
+      "type": "object",
+      "properties": {
+        "style": { "enum": ["off", "text", "emoji", "nerdfont"] },
+        "detail": { "enum": ["minimal", "project", "activity", "verbose"] }
+      },
+      "additionalProperties": true
+    },
+    "notifications": {
+      "type": "object",
+      "properties": {
+        "startup": { "type": "boolean" },
+        "recall": { "type": "boolean" },
+        "retain": { "type": "boolean" }
+      },
+      "additionalProperties": true
+    }
+  },
+  "additionalProperties": true,
+  "definitions": {
+    "bankEntry": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Stable unique key. Layers merge by id; tools and the decision model reference it. Defaults to alias."
+        },
+        "alias": {
+          "enum": ["project", "user"],
+          "description": "Keeps the coding / life role semantics (tags, derive, shared observations). Implied by a reserved id, and supplies a missing id."
+        },
+        "bankId": {
+          "type": "string",
+          "description": "Concrete Hindsight bank. Required for alias \"user\"; optional for coding entries."
+        },
+        "enabled": {
+          "type": "boolean",
+          "description": "Defaults to true. false disables the bank from any layer."
+        },
+        "access": {
+          "enum": ["read", "write", "read-write"],
+          "description": "Defaults to read-write. Read paths skip write entries; write paths skip read entries."
+        },
+        "derive": {
+          "enum": ["repo", "cwd", "manual", "basename"],
+          "description": "Only read on a coding entry (project role): how the bank name is derived. Ignored elsewhere."
+        },
+        "description": {
+          "type": "string",
+          "description": "Shown to the decision model when it picks banks."
+        },
+        "mission": {
+          "type": "object",
+          "properties": {
+            "retain": { "type": "string" },
+            "reflect": { "type": "string" },
+            "observations": { "type": "string" },
+            "retainStructuredChunkSize": { "type": "integer" }
+          },
+          "additionalProperties": true
+        },
+        "recall": {
+          "type": "object",
+          "properties": {
+            "enabled": { "type": "boolean" },
+            "maxTokens": { "type": "integer" },
+            "preamble": { "type": "string" }
+          },
+          "additionalProperties": true
+        },
+        "retain": {
+          "type": "object",
+          "properties": {
+            "enabled": {
+              "type": "boolean",
+              "description": "Defaults to true. false keeps the entry out of automatic writes entirely."
+            },
+            "mode": {
+              "enum": ["always", "decision", "explicit-only"],
+              "description": "always writes on every retain turn, decision asks the decision model, explicit-only never writes automatically. Defaults to always on the coding-role entry and explicit-only on every other entry."
+            }
+          },
+          "additionalProperties": true
+        },
+        "tagGroups": {
+          "type": "array",
+          "items": { "type": "object" },
+          "description": "Explicit Hindsight tag groups; replaces derived tags for that entry."
+        }
+      },
+      "required": ["id"],
+      "additionalProperties": true
+    }
+  }
+}

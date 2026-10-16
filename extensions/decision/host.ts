@@ -109,6 +109,19 @@ export function hostModelRef(model: unknown): DecisionModelRef | undefined {
 }
 
 /**
+ * A host model's context window in tokens. Both hosts catalogue it as
+ * `contextWindow`; the catalog types it as `number | null`, and a host that
+ * reports nothing leaves the decision layer on its fallback budget.
+ */
+export function modelContextWindowOf(model: unknown): number | undefined {
+  if (!isRecord(model)) return undefined;
+  const reported = model.contextWindow;
+  return typeof reported === "number" && Number.isFinite(reported) && reported > 0
+    ? reported
+    : undefined;
+}
+
+/**
  * omp's model query facade, read structurally: pi ships no `models` field on its
  * context and the value is host-provided, so the shape is narrowed, not asserted.
  */
@@ -377,6 +390,7 @@ export function degradedDecisionHost(): DecisionHost {
     kind: "unknown",
     roles: false,
     resolveRole: async () => undefined,
+    modelContextWindow: () => undefined,
     backends: () => [],
   };
 }
@@ -470,6 +484,7 @@ function createOmpHost(input: {
       return undefined;
     },
     sessionModel: () => hostModelRef(ctx.model),
+    modelContextWindow: (ref) => modelContextWindowOf(ompModelHandle(ctx, registry, ref)),
     backends(ref) {
       try {
         return ompLadder(ompModelHandle(ctx, registry, ref), ref, runtime, registry, sessionId);
@@ -489,6 +504,7 @@ function createPiHost(ctx: DecisionHostContext): DecisionHost {
     roles: false,
     resolveRole: () => undefined,
     sessionModel: () => hostModelRef(ctx.model),
+    modelContextWindow: (ref) => modelContextWindowOf(findPiModel(registry, ref)),
     backends(ref) {
       const model = findPiModel(registry, ref);
       if (!model) return [];

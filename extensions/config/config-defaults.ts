@@ -32,9 +32,14 @@ export const DEFAULT_CONFIG: ResolvedConfig = {
   decision: {
     enabled: true,
     model: "role:judge",
-    maxTokens: 200,
-    timeoutMs: 3_000,
-    maxContextChars: 6_000,
+    maxTokens: 4_096,
+    // The default arms no timer: a written value <= 0 normalizes here too, and
+    // the decision model's own transport decides how long the call may take.
+    timeoutMs: Number.POSITIVE_INFINITY,
+    // Final fallback when neither a hand-written value nor a resolved model
+    // supplies a budget; see DecisionConfig.maxContextChars.
+    maxContextChars: 32_768,
+    maxContextCharsWritten: false,
     cacheTtlMs: 60_000,
     fallback: { recallBanks: [], retainBanks: [] },
   },

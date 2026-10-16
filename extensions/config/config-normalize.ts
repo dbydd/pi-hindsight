@@ -174,18 +174,44 @@ function scoreFloors(value: unknown): RecallMinScores | undefined {
 function decisionConfig(value: unknown, banks: BankConfigEntry[]): DecisionConfig {
   const raw = isRecord(value) ? value : {};
   const fallback = isRecord(raw.fallback) ? raw.fallback : {};
+  // A usable written number is kept; everything else (missing, non-integer,
+  // non-positive) falls through to the model-derived budget in decision.ts.
+  const writtenContextChars =
+    typeof raw.maxContextChars === "number" &&
+    Number.isInteger(raw.maxContextChars) &&
+    raw.maxContextChars > 0
+      ? raw.maxContextChars
+      : undefined;
   return {
     enabled: bool(raw.enabled, DEFAULT_CONFIG.decision.enabled),
     model: stringValue(raw.model, DEFAULT_CONFIG.decision.model),
-    maxTokens: positiveInt(raw.maxTokens, DEFAULT_CONFIG.decision.maxTokens),
-    timeoutMs: positiveInt(raw.timeoutMs, DEFAULT_CONFIG.decision.timeoutMs),
-    maxContextChars: positiveInt(raw.maxContextChars, DEFAULT_CONFIG.decision.maxContextChars),
+    // Non-positive is a setting, not an error: no cap on the answer budget.
+    maxTokens: intOr(raw.maxTokens, DEFAULT_CONFIG.decision.maxTokens),
+    // Non-positive is a setting, not an error: it normalizes to "no timer".
+    timeoutMs: normalizeTimeoutMs(raw.timeoutMs, DEFAULT_CONFIG.decision.timeoutMs),
+    maxContextChars: writtenContextChars ?? DEFAULT_CONFIG.decision.maxContextChars,
+    maxContextCharsWritten: writtenContextChars !== undefined,
     cacheTtlMs: positiveInt(raw.cacheTtlMs, DEFAULT_CONFIG.decision.cacheTtlMs),
     fallback: {
       recallBanks: normalizeBanksFallback(fallback.recallBanks, banks),
       retainBanks: normalizeBanksFallback(fallback.retainBanks, banks),
     },
   };
+}
+
+/** A written integer, or the fallback for anything that is not one. */
+function intOr(value: unknown, fallback: number): number {
+  return typeof value === "number" && Number.isInteger(value) ? value : fallback;
+}
+
+/**
+ * A written non-positive budget means "no timer", so it lands on `Infinity`:
+ * `withTimeout` arms no timer for a non-finite value and only the caller's own
+ * signal can stop the call.
+ */
+function normalizeTimeoutMs(value: unknown, fallback: number): number {
+  const budget = intOr(value, fallback);
+  return budget > 0 ? budget : Number.POSITIVE_INFINITY;
 }
 
 function hasConfiguredRecallField(rawConfig: unknown, field: string): boolean {

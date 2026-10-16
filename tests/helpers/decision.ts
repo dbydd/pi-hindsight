@@ -16,12 +16,12 @@ import type { ResolvedConfig } from "../../extensions/types.js";
 export function decisionConfig(
   input: { banks?: unknown; decision?: unknown } = {},
 ): ResolvedConfig {
-  const decision = {
-    ...DEFAULT_CONFIG.decision,
-    ...(isRecord(input.decision) ? input.decision : {}),
-  };
-  const raw = { banks: input.banks ?? DEFAULT_CONFIG.banks, decision };
-  return normalizeConfig({ ...DEFAULT_CONFIG, banks: raw.banks, decision } as ResolvedConfig, raw);
+  const banks = input.banks ?? DEFAULT_CONFIG.banks;
+  const decision = isRecord(input.decision) ? input.decision : undefined;
+  return normalizeConfig(
+    { ...DEFAULT_CONFIG, banks, ...(decision ? { decision } : {}) } as ResolvedConfig,
+    { banks, ...(decision ? { decision } : {}) },
+  );
 }
 
 /** Backend that answers from a fixed table and records every call. */
