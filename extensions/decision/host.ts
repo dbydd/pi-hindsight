@@ -25,9 +25,24 @@ import type {
  * Host adapters: the only place that knows how a host resolves models and which
  * typed backend it can offer for one.
  *
- * Nothing here is imported statically from an omp package — a pi tree ships no
- * `@oh-my-pi/*` module, so the omp judgment surface is loaded with a computed
- * specifier and a failure simply removes that rung.
+ * Nothing here is imported statically from an omp package — this file is loaded
+ * on both hosts and a pi tree ships no `@oh-my-pi/*` module, so a top-level import
+ * would fail at module load and take the whole extension down with it. Every host
+ * surface is therefore reached through one `await import("<literal>")` per
+ * candidate, each in its own try/catch, so a miss is a missing rung and nothing
+ * else. The specifiers stay *literals* on purpose: omp ships as one bundled file
+ * whose `@oh-my-pi/*` specifiers were rewritten at build time, so only a literal
+ * survives bundling — anything computed is looked up by node resolution at
+ * runtime and misses even on omp, which silently cost both judgment rungs. The
+ * suite drives the ladder through the exported seams, and both loaders were
+ * confirmed against a real omp process, where they answer with the full surface.
+ *
+ * Those literals carry one deployment constraint: install pi-hindsight as a real
+ * *copy* under `~/.omp/plugins/node_modules/`, never as a symlink out to a dev
+ * checkout. omp keeps `@oh-my-pi/*` inside that directory, so package lookup only
+ * reaches those modules while the package itself resolves there; observed on a
+ * real install, a symlinked tree answers `undefined` from both ladders and raises
+ * nothing, the same loud-quiet symptom as a computed specifier. Copy, don't link.
  */
 
 /** The omp judgment surface used by the two omp rungs. */
@@ -106,29 +121,57 @@ export function hostModelsFacade(
   return { resolve };
 }
 
-const OMP_JUDGMENT_SPECIFIERS = [
-  "@oh-my-pi/pi-ai/judgment",
-  "@oh-my-pi/pi-ai",
-  "@oh-my-pi/pi-coding-agent/judgment",
-];
+/** Test seam: supplies the runtime instead of resolving a host module. */
+export type JudgmentLoader = () => Promise<OmpJudgmentRuntime | undefined>;
 
-/** Load the omp judgment surface; undefined wherever the host does not ship it. */
-export async function loadOmpJudgmentRuntime(): Promise<OmpJudgmentRuntime | undefined> {
-  for (const specifier of OMP_JUDGMENT_SPECIFIERS) {
-    try {
-      // Computed specifier: a literal import would be resolved (and fail) on a pi tree.
-      const loaded = (await import(specifier)) as Partial<OmpJudgmentRuntime>;
-      if (
-        typeof loaded.isJudgmentApi === "function" &&
-        typeof loaded.createNativeJudge === "function"
-      ) {
-        return loaded as OmpJudgmentRuntime;
-      }
-    } catch {
-      // Not this host's package; the next specifier may be.
-    }
+/**
+ * Narrow one dynamically imported candidate to the judgment surface. Narrow from
+ * `unknown`: the module is host-authored and ships no type here to trust.
+ */
+function judgmentRuntimeFrom(loaded: unknown): OmpJudgmentRuntime | undefined {
+  if (
+    !isRecord(loaded) ||
+    typeof loaded.isJudgmentApi !== "function" ||
+    typeof loaded.createNativeJudge !== "function"
+  ) {
+    return undefined;
+  }
+  return loaded as unknown as OmpJudgmentRuntime;
+}
+
+/**
+ * Load the omp judgment surface; undefined wherever the host does not ship it.
+ *
+ * One `try` per candidate, each wrapping a single literal `import()`: only a
+ * literal survives being bundled, since omp rewrites these specifiers at build
+ * time and anything computed resolves against bare node instead. Hence no loop,
+ * no variable specifier — that shape is what makes omp's two judgment rungs load
+ * at all. Two candidates: `pi-ai` root ships none of these exports, and
+ * `pi-coding-agent`'s is the same source under another name, kept for hosts that
+ * moved it. Each is shape-checked, so a module missing a member falls through.
+ */
+async function importJudgmentRuntime(): Promise<OmpJudgmentRuntime | undefined> {
+  try {
+    return judgmentRuntimeFrom(await import("@oh-my-pi/pi-ai/judgment"));
+  } catch {
+    // No such module on this host; the next candidate may still answer.
+  }
+  try {
+    return judgmentRuntimeFrom(await import("@oh-my-pi/pi-coding-agent/judgment"));
+  } catch {
+    // Same absence, second candidate.
   }
   return undefined;
+}
+
+/**
+ * The omp judgment surface read through `loader`, defaulting to the real one.
+ * Tests inject a runtime here instead of relying on a host install.
+ */
+export function loadOmpJudgmentRuntime(
+  loader: JudgmentLoader = importJudgmentRuntime,
+): Promise<OmpJudgmentRuntime | undefined> {
+  return loader();
 }
 
 export function detectHostKind(ctx: DecisionHostContext | undefined): HostKind {
@@ -136,11 +179,6 @@ export function detectHostKind(ctx: DecisionHostContext | undefined): HostKind {
   if (ctx?.modelRegistry) return "pi";
   return "unknown";
 }
-
-const OMP_ROLE_SPECIFIERS = [
-  "@oh-my-pi/pi-coding-agent/registry/agent-registry",
-  "@oh-my-pi/pi-coding-agent",
-];
 
 /** Structural view of the omp scoped-model entry point. */
 export interface OmpRoleRuntime {
@@ -159,31 +197,60 @@ export interface OmpRoleRuntime {
   };
 }
 
+/** Test seam: supplies the role runtime instead of resolving a host module. */
+export type OmpRoleLoader = () => Promise<OmpRoleRuntime | undefined>;
+
 /**
- * Load the omp role resolution surface. Both halves live behind computed
- * specifiers (a pi tree ships no `@oh-my-pi/*` module); a failure removes the
- * rung instead of throwing, so pi and unknown hosts keep their behaviour.
+ * Narrow one dynamically imported candidate to the role surface. Narrow from
+ * `unknown`: the module is host-authored and ships no type here to trust.
  */
-export async function loadOmpRoleRuntime(
-  specifiers: readonly string[] = OMP_ROLE_SPECIFIERS,
-): Promise<OmpRoleRuntime | undefined> {
-  for (const specifier of specifiers) {
-    try {
-      const loaded = (await import(specifier)) as Partial<OmpRoleRuntime>;
-      if (typeof loaded.resolveScopedModels === "function") {
-        return loaded as OmpRoleRuntime;
-      }
-    } catch {
-      // Not this host's package; the next specifier may be.
-    }
+function roleRuntimeFrom(loaded: unknown): OmpRoleRuntime | undefined {
+  if (!isRecord(loaded) || typeof loaded.resolveScopedModels !== "function") {
+    return undefined;
+  }
+  return loaded as unknown as OmpRoleRuntime;
+}
+
+/**
+ * The real load, read in the same one-literal-per-`try` shape as the judgment
+ * surface. The root specifier carries both halves on omp — `AgentRegistry`
+ * alongside the scoped resolver — so the others exist only so a host that has
+ * since moved that export still finds one.
+ */
+async function importRoleRuntime(): Promise<OmpRoleRuntime | undefined> {
+  try {
+    return roleRuntimeFrom(await import("@oh-my-pi/pi-coding-agent"));
+  } catch {
+    // No such module on this host; the next candidate may still answer.
+  }
+  try {
+    return roleRuntimeFrom(await import("@oh-my-pi/pi-coding-agent/registry/agent-registry"));
+  } catch {
+    // Same absence, second candidate.
+  }
+  try {
+    return roleRuntimeFrom(await import("@oh-my-pi/coding-agent"));
+  } catch {
+    // Same absence, third candidate — the pre-rename package name.
   }
   return undefined;
 }
 
 /**
- * One-shot loader. A pi tree resolves none of the specifiers, and a failed
- * dynamic import is not cached by the module loader, so the memo keeps a role
- * spec from paying for that lookup on every turn.
+ * The omp role surface read through `loader`, defaulting to the real one. A pi
+ * tree ships no `@oh-my-pi/*`, which fails to resolve and so removes the rung,
+ * leaving pi and unknown hosts their behaviour unchanged.
+ */
+export function loadOmpRoleRuntime(
+  loader: OmpRoleLoader = importRoleRuntime,
+): Promise<OmpRoleRuntime | undefined> {
+  return loader();
+}
+
+/**
+ * One-shot loader. A pi tree resolves no omp specifier, and a failed dynamic
+ * import is not cached by the module loader, so the memo keeps a role spec from
+ * paying for that lookup on every turn.
  */
 function memoizeRoleRuntime(
   load: () => Promise<OmpRoleRuntime | undefined>,
@@ -237,16 +304,21 @@ function findOmpSessionSettings(runtime: OmpRoleRuntime, sessionManager: unknown
  * role through `modelRegistry.getAvailable()` with no kind, which defaults to
  * `chat` — a judge/image/classifier model is invisible there and the role would
  * silently miss. Undefined wherever any half is unavailable or answers nothing.
+ *
+ * Omit both `runtime` and `load` and this still runs the production path: `load`
+ * falls back to the memoized default, never to "no runtime". Reading absence as
+ * the default made a direct call resolve nothing, which then looked like the
+ * ladder being broken rather than the argument being left out.
  */
 export async function resolveOmpRole(input: {
   role: string;
   registry: HostRegistryLike;
   sessionManager?: unknown;
   runtime?: OmpRoleRuntime;
-  /** Overrides the loader: tests inject a runtime without a real host. */
+  /** Overrides the production loader; tests inject a runtime without a real host. */
   load?: () => Promise<OmpRoleRuntime | undefined>;
 }): Promise<DecisionModelRef | undefined> {
-  const runtime = input.runtime ?? (await input.load?.()) ?? undefined;
+  const runtime = input.runtime ?? (await (input.load ?? loadDefaultRoleRuntime)());
   if (!runtime) return undefined;
   const settings = findOmpSessionSettings(runtime, input.sessionManager);
   if (!settings) return undefined;

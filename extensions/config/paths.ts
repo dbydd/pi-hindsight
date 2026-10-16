@@ -19,18 +19,12 @@
  */
 import { basename, dirname, join } from "node:path";
 import { CONFIG_DIR_NAME, getAgentDir } from "@earendil-works/pi-coding-agent";
+import { isRecord } from "./is-record.js";
 
 const CONFIG_DIR_FALLBACK = ".pi";
 const AGENT_DIR_NAME = "agent";
 const SESSIONS_DIR_NAME = "sessions";
 const SESSION_FILE_SUFFIX = ".jsonl";
-
-/**
- * omp's own dirs module. It exists only where omp is installed, so a static import
- * cannot work: the specifier stays a variable, which also keeps typechecking from
- * requiring an omp-only package.
- */
-const OMP_DIRS_MODULE = "@oh-my-pi/pi-utils/dirs";
 
 export interface HostPathsOptions {
   /** Environment to resolve from; defaults to the live process env. */
@@ -71,8 +65,31 @@ export function agentDirFromSessionFile(sessionFile: string | undefined): string
   return agentDir;
 }
 
+/**
+ * Load omp's dirs surface, or nothing where the host ships no such module.
+ *
+ * One `try` per candidate, each wrapping a single literal `import()`: omp ships as
+ * one bundled file whose `@oh-my-pi/*` specifiers were rewritten at build time, so
+ * a computed specifier resolves against bare node instead and misses even on omp —
+ * which is why this probe never fired there. Hence no variable specifier and no
+ * loop. `@oh-my-pi/pi-utils/dirs` was that miss: it is absent from omp's bundled
+ * table, whereas `pi-coding-agent` root exports both `getAgentDir` and
+ * `CONFIG_DIR_NAME` — verified against omp 18.11.1.
+ */
 async function loadOmpHostDirs(): Promise<HostDirsModule> {
-  return (await import(OMP_DIRS_MODULE)) as HostDirsModule;
+  try {
+    const loaded = await import("@oh-my-pi/pi-coding-agent");
+    return isRecord(loaded) ? (loaded as unknown as HostDirsModule) : {};
+  } catch {
+    // No such module on this host; the next candidate may still answer.
+  }
+  try {
+    const loaded = await import("@oh-my-pi/pi-utils/dirs");
+    return isRecord(loaded) ? (loaded as unknown as HostDirsModule) : {};
+  } catch {
+    // Same absence, second candidate.
+  }
+  return {};
 }
 
 /**
