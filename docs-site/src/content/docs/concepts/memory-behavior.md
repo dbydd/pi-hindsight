@@ -183,4 +183,145 @@ and maps onto the user entry's mode.
 
 `hindsight_retain_user` is the preferred tool for durable global user identity, preferences, and cross-project workflows.
 
+## Decision-driven bank routing
+
+The optional `decision` layer asks one model to answer a small boolean question table, and recall and
+retain use that table instead of a fixed bank list. It routes memory; it never stores anything itself.
+
+### One call, every bank
+
+Each path makes its **own** call, with the candidates it is allowed to route to:
+
+- **recall** — at the context hook, with the readable banks.
+- **retain** — at agent end, with the write candidates.
+
+One call asks one question per decision, so a single recall call covers the whole door:
+
+| Question id      | Asked when                               | Meaning                                                        |
+| ---------------- | ---------------------------------------- | -------------------------------------------------------------- |
+| `inject`         | read candidates were offered             | Gate A: does this turn inject automatic recall at all?         |
+| `read:<bankId>`  | the bank is readable                     | Gate B: should automatic recall read this bank this turn?      |
+| `write:<bankId>` | the bank is in `retain.mode: "decision"` | Gate B: should this turn's transcript be written to this bank? |
+
+`combined` is the backend's native answer shape: state plus the whole question table in, one answer per
+question id out. A backend that answers only some questions has not answered them — the missing ones make
+that rung fail rather than silently count as "no".
+
+How each gate maps onto the two paths:
+
+- `recall.mode: "decision"` reads **gate A** only. A "no" skips the turn with no recall call and no
+  injection.
+- `recall.bankMode: "decision"` reads **gate B** for reads. Only banks answered `true` are in the turn's
+  scope set; tag derivation and injection position are unchanged.
+- `banks[].retain.mode: "decision"` reads **gate B** for writes, one question per `decision` entry.
+
+`always` entries are never offered to the model and are written unconditionally, and `explicit-only`
+entries never reach it, so a config with no `decision` entry makes no decision call at all — including no
+added latency.
+
+When gate A is answered "no", nothing is read this turn, whatever the bank answers said: an off inject
+gate empties the read set rather than reading banks the turn did not ask for.
+
+### Fallback chain
+
+The layer walks a ladder of backends and the ladder always ends at routing, never at "memory is off":
+
+1. **`always` entries go straight in.** They are unioned in on the write side before the model is
+   consulted, so an unreachable model cannot cost them a write.
+2. **A backend answers.** The first rung that returns a usable answer wins: a typed judgment surface,
+   then a classifier, then a text bridge over any chat model. A rung that times out, throws, or answers
+   an incomplete table is abandoned and the next rung is tried.
+3. **No rung answers.** Routing falls back to `decision.fallback.recallBanks` / `decision.fallback.retainBanks`,
+   and where those are empty to the top-level `banksFallback`. Each list is filtered to entries that are
+   still enabled and access-compatible, so a stale id cannot route anywhere.
+4. **The filtered set is empty.** That round routes nowhere: recall skips the turn, retain writes nothing
+   this turn. This is a **skip**, not a loss — see below.
+
+Answers are filtered twice. Anything the prompt did not offer, and any offered bank that is no longer
+enabled and access-compatible, is dropped and reported rather than written or read.
+
+### An empty set is never a lost turn
+
+An empty routing set ends the current round's write; it does not discard the turn's content.
+
+- The retain cursor still advances past the turn, so the next turn does not re-offer it.
+- A notification reports the skip with its reason.
+- A `phase: "retain"` telemetry event records the reason and any refused bank ids.
+
+The same holds for a failed decision on the read side: recall skips with `decision-no-inject` or
+`decision-no-banks`, which is a routing decision, not a memory outage.
+
+### Decision context
+
+The prompt carries three parts:
+
+- the **last user message** — always, uncut;
+- the **host task state** — always, uncut;
+- **recent activity**, filled newest-first up to `decision.maxContextChars`.
+
+`maxContextChars` budgets only the recent-activity section. The last user message and the task state are
+never truncated by it, so a long transcript crowds out old chatter but cannot crowd out what the turn is
+about and what work is open.
+
+Task state is read per host, and the two hosts read it differently:
+
+| Host | Reader                                     | Projection                                                                                                                             |
+| ---- | ------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------- |
+| omp  | the `omp-todo-more:read` event             | `{kind: "ok", goal, openItems:[{phase,title,explanation}]}`, or `{kind: "unavailable"}`                                                |
+| pi   | the branch `rpiv-todo-state` session entry | `TaskDetails{tasks: Task[], nextId}`, each `Task` carrying `id`, `subject`, `status`, and optional `description`, `blockedBy`, `owner` |
+
+`{kind: "unavailable"}` means the reader could not read the todo surface (plugin absent, entry missing,
+malformed record). When both hosts fail, the state is `unknown`.
+
+**`unavailable` is not "no tasks".** An unreadable task list is not an empty one, and the model is told so:
+`unknown` means the task state is unknown, and the decision is made as "task state unknown" rather than
+"no open work". Otherwise a missing todo plugin would silently route memory as if the turn had nothing
+in flight.
+
+### Decision cache
+
+Each path's result is cached on its own. The key is:
+
+- the offered bank ids, each carrying its direction prefix (`read:<id>` / `write:<id>`), plus
+- the last user message's content identity.
+
+The direction prefix matters: one turn's recall call (read candidates) and retain call (write candidates)
+can offer the same ids with different question tables, and they must not share a cached result. Content
+identity rather than length means auto-continue retries that append an identical nudge reuse the first
+result. Reuse expires after `decision.cacheTtlMs` (default 60s).
+
+### Telemetry and where to look
+
+Decision spans ride the retrieval-telemetry shape with `phase: "decision"`; the write-routing side adds
+`phase: "retain"`. Diagnostic fields:
+
+- `reason` — why the layer resolved as it did: a backend label, or a fallback reason such as `disabled`,
+  `no-model`, `backends-failed`, `no-candidates`.
+- `decisionReason` (retain side) — the decision layer's own reason for the write routing.
+- `droppedBanks` — bank ids the model named that were refused: not offered, or no longer eligible.
+- `status` / `cache` / `backend` / `ladder` / `attempt` — which rung answered, on which attempt, cached or
+  not.
+
+On the recall side a routing decision shows up as the skip reasons `decision-no-inject` (gate A off) and
+`decision-no-banks` (gate B picked nothing readable). On the retain side a skip shows up as
+`phase: "retain"` with `status: "skipped"` plus its `reason` and any `droppedBanks`.
+
+Spans are emitted on the host event bus as `hindsight:retrieval` events, so the sink is whatever listens
+there — a diagnostics extension or another subscriber on that event. They are not written to disk unless
+your host-side subscriber persists them.
+
+This is routing telemetry and nothing else. Last-recall snapshots
+(`recall.storeLastRecall`, `.pi/hindsight/last-recall.json` or `.omp/hindsight/last-recall.json`) are a
+separate debug sidecar for what recall returned, and doctor is a separate read-only diagnostic workflow;
+neither one reads, writes, or interprets the other.
+
+### Degradation philosophy
+
+The decision layer is an optional router. When it cannot answer — disabled, no model, timeout, backend
+failure, an unusable answer — it degrades to the fallback banks and **recall stays on**. It never raises
+into the calling turn and never turns memory off because a model was unreachable. A broken decision model
+costs routing quality, not memory.
+
+Diagnosing the five common routing failures: [Troubleshooting](/pi-hindsight/guides/troubleshooting/).
+
 ADR 004 removed the heuristic memory router that used to classify retain candidates as `project`, `global`, `both`, or `skip`; ADR 002 documents the explicit routing strategy seam it superseded.

@@ -81,6 +81,7 @@ export default defineConfig({
             { label: "Importing sessions", slug: "guides/importing-sessions" },
             { label: "Inspect recalls and receipts", slug: "guides/inspect-recalls-and-receipts" },
             { label: "Recover Retain Queue", slug: "guides/recover-retain-queue" },
+            { label: "Troubleshooting", slug: "guides/troubleshooting" },
             { label: "Run local smoke test", slug: "guides/run-local-smoke-test" },
             { label: "MCP multi-client bank wiring", slug: "guides/mcp-multi-client" },
             { label: "Upgrading to domain banks", slug: "guides/upgrading-to-domain-banks" },

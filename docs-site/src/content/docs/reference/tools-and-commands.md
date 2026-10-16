@@ -82,6 +82,15 @@ Pi exposes memory tools plus an agent control plane for selected banks:
 
 Platform-wide bank list/delete and full control-plane browsing stay in the Hindsight web UI. Bundled mental-model templates remain available from the hub (`t`).
 
+The routing-relevant reads used by diagnostics:
+
+- `hindsight_status` — the widest read: setup gate (`setupComplete` plus `setupHint`), scope identity, bank selection, queue state, `sync` readiness, and the `hostMemoryBackend` fact (`{ host, backend, redundant, available }`).
+- `hindsight_bank_list` — Pi-configured banks only (id, `bankId`, role, `enabled`, `access`, retain mode), with no Hindsight round-trip, so it answers even when the server is unreachable. This is the routing table the decision layer offers.
+- `hindsight_bank_get` — one bank's Hindsight-side facts: whether it exists, its stats, and its bank config. Use it to tell a typo'd `bankId` from a bank that was never created.
+- `hindsight_config_get` — the effective allowlisted config with no raw secrets: read `recall.mode`, `recall.bankMode`, `banks[].retain.mode`, `decision.*`, and `banksFallback` when a routing decision needs explaining.
+
+Walking those four in order is the [Troubleshooting](/pi-hindsight/guides/troubleshooting/) triage path.
+
 ### Tool exposure and discovery
 
 Exposure is generated from one table (`extensions/operations/tool-presentation.ts`) and stamped on each registered tool; the same object carries both hosts' marks, and each host reads only its own key.
