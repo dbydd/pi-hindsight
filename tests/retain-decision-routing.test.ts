@@ -666,7 +666,7 @@ describe("retain decision wiring through the lifecycle", () => {
     return {
       kind: "pi",
       roles: false,
-      resolveRole: () => undefined,
+      resolveRole: async () => undefined,
       sessionModel: () => ({ provider: "magpie", modelId: "group/labor" }),
       backends: () => [backend],
     };

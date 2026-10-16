@@ -52,6 +52,10 @@ export interface OmpJudgmentRuntime {
 /** Structural view of the registry surface both hosts expose under different classes. */
 export interface HostRegistryLike {
   find?(provider: string, modelId: string): unknown;
+  /** Model catalog; the scoped role resolver must read the all-kind view. */
+  getAvailable?(kind?: string): unknown;
+  getDiscoverableProviders?(): unknown;
+  refresh?(mode?: unknown, options?: unknown): unknown;
   complete?(model: unknown, context: unknown, options?: unknown): Promise<unknown>;
   stream?(model: unknown, context: unknown, options?: unknown): unknown;
   classify?(model: unknown, context: unknown, options?: unknown): Promise<unknown>;
@@ -72,6 +76,12 @@ export interface DecisionHostContext {
   modelRegistry?: unknown;
   /** omp's model query facade (role aliases live here). */
   models?: { resolve?(spec: string): unknown };
+  /**
+   * The live session manager. omp ships no settings on the extension context,
+   * but the agent registry maps this manager back to a session whose settings
+   * the scoped role resolver needs; pi never fills it.
+   */
+  sessionManager?: unknown;
 }
 
 export function hostModelRef(model: unknown): DecisionModelRef | undefined {
@@ -127,17 +137,158 @@ export function detectHostKind(ctx: DecisionHostContext | undefined): HostKind {
   return "unknown";
 }
 
+const OMP_ROLE_SPECIFIERS = [
+  "@oh-my-pi/pi-coding-agent/registry/agent-registry",
+  "@oh-my-pi/pi-coding-agent",
+];
+
+/** Structural view of the omp scoped-model entry point. */
+export interface OmpRoleRuntime {
+  resolveScopedModels(
+    this: void,
+    parsed: unknown,
+    registry: {
+      getAvailable(kind?: string): unknown;
+      getDiscoverableProviders(): unknown;
+      refresh(mode?: unknown, options?: unknown): unknown;
+    },
+    settings: unknown,
+  ): Promise<Array<{ model?: unknown }>>;
+  AgentRegistry?: {
+    global?(this: void): { list(this: void): Array<{ session?: unknown }> };
+  };
+}
+
+/**
+ * Load the omp role resolution surface. Both halves live behind computed
+ * specifiers (a pi tree ships no `@oh-my-pi/*` module); a failure removes the
+ * rung instead of throwing, so pi and unknown hosts keep their behaviour.
+ */
+export async function loadOmpRoleRuntime(
+  specifiers: readonly string[] = OMP_ROLE_SPECIFIERS,
+): Promise<OmpRoleRuntime | undefined> {
+  for (const specifier of specifiers) {
+    try {
+      const loaded = (await import(specifier)) as Partial<OmpRoleRuntime>;
+      if (typeof loaded.resolveScopedModels === "function") {
+        return loaded as OmpRoleRuntime;
+      }
+    } catch {
+      // Not this host's package; the next specifier may be.
+    }
+  }
+  return undefined;
+}
+
+/**
+ * One-shot loader. A pi tree resolves none of the specifiers, and a failed
+ * dynamic import is not cached by the module loader, so the memo keeps a role
+ * spec from paying for that lookup on every turn.
+ */
+function memoizeRoleRuntime(
+  load: () => Promise<OmpRoleRuntime | undefined>,
+): () => Promise<OmpRoleRuntime | undefined> {
+  let pending: Promise<OmpRoleRuntime | undefined> | undefined;
+  return () => (pending ??= load());
+}
+
+/** The production load, memoized: the answer never changes within a process. */
+const loadDefaultRoleRuntime = memoizeRoleRuntime(() => loadOmpRoleRuntime());
+
+/** The fake `Args` omp's scoped resolver reads. It touches the model list only. */
+function roleArgs(role: string): unknown {
+  return {
+    models: [`@${role}`],
+    messages: [],
+    fileArgs: [],
+    unknownFlags: new Map(),
+    unrecognizedFlags: [],
+    invalidFlagValues: [],
+  };
+}
+
+/**
+ * Find this session in omp's agent registry, then read its settings. omp exposes
+ * no settings on the extension context, so the session manager is the handle
+ * that identifies the running session.
+ */
+function findOmpSessionSettings(runtime: OmpRoleRuntime, sessionManager: unknown): unknown {
+  const registry = runtime.AgentRegistry;
+  // Reading through the object keeps `this` bound, which the static `global()` has.
+  if (typeof registry?.global !== "function" || !sessionManager) return undefined;
+  try {
+    const agents = registry.global().list();
+    if (!Array.isArray(agents)) return undefined;
+    const match = agents.find((agent) => {
+      const session = isRecord(agent) ? agent.session : undefined;
+      return isRecord(session) && session.sessionManager === sessionManager;
+    });
+    const session = isRecord(match) ? match.session : undefined;
+    return isRecord(session) ? session.settings : undefined;
+  } catch {
+    // A registry that will not list its agents simply has no settings for us.
+    return undefined;
+  }
+}
+
+/**
+ * Resolve a role through omp's scoped resolver, whose registry view we build so
+ * `getAvailable` is asked for every kind. The host's `models.resolve()` runs the
+ * role through `modelRegistry.getAvailable()` with no kind, which defaults to
+ * `chat` — a judge/image/classifier model is invisible there and the role would
+ * silently miss. Undefined wherever any half is unavailable or answers nothing.
+ */
+export async function resolveOmpRole(input: {
+  role: string;
+  registry: HostRegistryLike;
+  sessionManager?: unknown;
+  runtime?: OmpRoleRuntime;
+  /** Overrides the loader: tests inject a runtime without a real host. */
+  load?: () => Promise<OmpRoleRuntime | undefined>;
+}): Promise<DecisionModelRef | undefined> {
+  const runtime = input.runtime ?? (await input.load?.()) ?? undefined;
+  if (!runtime) return undefined;
+  const settings = findOmpSessionSettings(runtime, input.sessionManager);
+  if (!settings) return undefined;
+  try {
+    const resolved = await runtime.resolveScopedModels(
+      roleArgs(input.role),
+      {
+        // Always the all-kind view: the resolver's internal `getAvailable()`
+        // defaults to `chat`, which hides every non-chat model.
+        getAvailable: () => input.registry.getAvailable?.("all"),
+        getDiscoverableProviders: () => input.registry.getDiscoverableProviders?.(),
+        refresh: (mode?: unknown, options?: unknown) => input.registry.refresh?.(mode, options),
+      },
+      settings,
+    );
+    const model = Array.isArray(resolved) ? resolved[0]?.model : undefined;
+    return hostModelRef(model);
+  } catch {
+    // A resolver that rejects or answers nothing falls through to the facade.
+    return undefined;
+  }
+}
+
 export interface CreateDecisionHostInput {
   ctx?: DecisionHostContext;
   /** Loaded omp judgment surface; omitted on pi and when the load failed. */
   runtime?: OmpJudgmentRuntime;
   sessionId?: string;
+  /** Loads the omp role surface; tests inject a runtime without a real host. */
+  loadRoleRuntime?: () => Promise<OmpRoleRuntime | undefined>;
 }
 
 /** Adapter for the detected host; an unknown host offers no model and no rung. */
 export function createDecisionHost(input: CreateDecisionHostInput): DecisionHost {
   const kind = detectHostKind(input.ctx);
-  if (kind === "omp" && input.ctx) return createOmpHost({ ...input, ctx: input.ctx });
+  if (kind === "omp" && input.ctx) {
+    return createOmpHost({
+      ...input,
+      ctx: input.ctx,
+      ...(input.loadRoleRuntime ? { loadRoleRuntime: input.loadRoleRuntime } : {}),
+    });
+  }
   if (kind === "pi" && input.ctx) return createPiHost(input.ctx);
   return degradedDecisionHost();
 }
@@ -151,7 +302,7 @@ export function degradedDecisionHost(): DecisionHost {
   return {
     kind: "unknown",
     roles: false,
-    resolveRole: () => undefined,
+    resolveRole: async () => undefined,
     backends: () => [],
   };
 }
@@ -160,6 +311,8 @@ export interface CreateRuntimeDecisionHostInput {
   /** Live extension-context surfaces; absent before a session starts. */
   ctx?: DecisionHostContext;
   sessionId?: string;
+  /** Loads the omp role surface; omitted outside tests. */
+  loadRoleRuntime?: () => Promise<OmpRoleRuntime | undefined>;
 }
 
 /**
@@ -176,6 +329,7 @@ export async function createRuntimeDecisionHost(
       ...(input.ctx ? { ctx: input.ctx } : {}),
       ...(runtime ? { runtime } : {}),
       ...(input.sessionId ? { sessionId: input.sessionId } : {}),
+      loadRoleRuntime: input.loadRoleRuntime ?? loadDefaultRoleRuntime,
     });
   } catch {
     return degradedDecisionHost();
@@ -205,6 +359,7 @@ function createOmpHost(input: {
   ctx: DecisionHostContext;
   runtime?: OmpJudgmentRuntime;
   sessionId?: string;
+  loadRoleRuntime?: () => Promise<OmpRoleRuntime | undefined>;
 }): DecisionHost {
   const { ctx, runtime, sessionId } = input;
   const registry = (ctx.modelRegistry ?? {}) as HostRegistryLike;
@@ -212,7 +367,22 @@ function createOmpHost(input: {
   return {
     kind: "omp",
     roles: typeof models?.resolve === "function",
-    resolveRole(name) {
+    async resolveRole(name) {
+      // The scoped resolver is the primary path: it reads the role through an
+      // all-kind registry view, so a judge role resolves instead of silently
+      // missing. The facade below covers chat models on hosts that ship no
+      // scoped resolver, or none that we can reach.
+      try {
+        const scoped = await resolveOmpRole({
+          role: name,
+          registry,
+          ...(ctx.sessionManager ? { sessionManager: ctx.sessionManager } : {}),
+          ...(input.loadRoleRuntime ? { load: input.loadRoleRuntime } : {}),
+        });
+        if (scoped) return scoped;
+      } catch {
+        // Never let a role lookup break the turn; the facade is next.
+      }
       if (typeof models?.resolve !== "function") return undefined;
       // Newer hosts take a bare role name; older ones take the `@` alias form.
       for (const specifier of [name, `@${name}`]) {
@@ -270,14 +440,19 @@ function ompModelHandle(
   registry: HostRegistryLike,
   ref: DecisionModelRef,
 ): unknown {
+  // Registry first. The host's `models.resolve()` runs its spec through
+  // `resolveModelRoleValue(..., modelRegistry.getAvailable())`, and `getAvailable()`
+  // defaults to the `chat` kind — so a judge/image/classifier model is invisible
+  // there and an explicit `provider/modelId` spec would miss even though the model
+  // is configured and authenticated. `registry.find` is kind-agnostic.
   try {
-    const resolved = ctx.models?.resolve?.(`${ref.provider}/${ref.modelId}`);
-    if (resolved) return resolved;
+    const found = registry.find?.(ref.provider, ref.modelId);
+    if (found) return found;
   } catch {
-    // Fall through to the registry lookup.
+    // Fall through to the host resolver.
   }
   try {
-    return registry.find?.(ref.provider, ref.modelId);
+    return ctx.models?.resolve?.(`${ref.provider}/${ref.modelId}`);
   } catch {
     return undefined;
   }

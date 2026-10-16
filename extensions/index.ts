@@ -22,6 +22,9 @@ function decisionHostContext(ctx: ExtensionContext): DecisionHostContext {
     ...(ctx.model ? { model: ctx.model } : {}),
     ...(ctx.modelRegistry ? { modelRegistry: ctx.modelRegistry } : {}),
     ...(models ? { models } : {}),
+    // omp exposes no settings on the extension context, so the role resolver
+    // identifies this session in the agent registry by its session manager.
+    ...(ctx.sessionManager ? { sessionManager: ctx.sessionManager } : {}),
   };
 }
 

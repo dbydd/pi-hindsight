@@ -109,7 +109,7 @@ export function createDecisionLayer(deps: DecisionLayerDeps): DecisionLayer {
         maxContextChars: settings.maxContextChars,
       });
 
-      const resolved = resolveDecisionModel({
+      const resolved = await resolveDecisionModel({
         spec: settings.model,
         host: deps.host,
         observer: deps.observer,
