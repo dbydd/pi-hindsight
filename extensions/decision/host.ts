@@ -37,12 +37,14 @@ import type {
  * suite drives the ladder through the exported seams, and both loaders were
  * confirmed against a real omp process, where they answer with the full surface.
  *
- * Those literals carry one deployment constraint: install pi-hindsight as a real
- * *copy* under `~/.omp/plugins/node_modules/`, never as a symlink out to a dev
- * checkout. omp keeps `@oh-my-pi/*` inside that directory, so package lookup only
- * reaches those modules while the package itself resolves there; observed on a
- * real install, a symlinked tree answers `undefined` from both ladders and raises
- * nothing, the same loud-quiet symptom as a computed specifier. Copy, don't link.
+ * Only the literal half is reproduced. A probe that reached these files by a path
+ * outside omp's own extension loading once reported `undefined` for both loaders
+ * while the same literals answered inside the entry file — but a controlled A/B
+ * since then loaded a copy and a symlinked checkout alike, so that reading is not
+ * a property of the install layout and nothing here depends on one. What stands:
+ * load (or probe) the package the way omp loads it, and distrust an off-root probe
+ * that reports a missing rung, because that symptom is indistinguishable from the
+ * real thing.
  */
 
 /** The omp judgment surface used by the two omp rungs. */
