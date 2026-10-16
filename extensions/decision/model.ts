@@ -9,6 +9,9 @@ import type { DecisionBackend, DecisionHost, DecisionModelRef } from "./types.js
  * may not have; a host without one (pi) skips that level with a telemetry span
  * and uses its session model, so the default config still decides instead of
  * failing every turn. `<provider>/<modelId>` is available on every host.
+ *
+ * Role resolution is async on hosts that load their role table from host
+ * modules, so this resolves a promise; every caller already runs async.
  */
 
 const ROLE_PREFIX = "role:";
@@ -51,9 +54,9 @@ export interface ResolveDecisionModelInput {
 }
 
 /** Resolve the configured model to a ladder, or undefined when no rung is available. */
-export function resolveDecisionModel(
+export async function resolveDecisionModel(
   input: ResolveDecisionModelInput,
-): ResolvedDecisionModel | undefined {
+): Promise<ResolvedDecisionModel | undefined> {
   const started = input.started ?? Date.now();
   const observer = input.observer;
   const parsed = parseDecisionModelSpec(input.spec);
@@ -71,7 +74,7 @@ export function resolveDecisionModel(
   if (parsed.kind === "role") {
     source = "role";
     if (input.host.roles) {
-      ref = input.host.resolveRole(parsed.name);
+      ref = await input.host.resolveRole(parsed.name);
       if (!ref)
         emitDecision(observer, started, {
           status: "skipped",

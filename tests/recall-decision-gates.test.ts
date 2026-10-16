@@ -364,7 +364,7 @@ describe("decision host construction", () => {
 
     expect(host.kind).toBe("pi");
     expect(host.roles).toBe(false);
-    const resolved = resolveDecisionModel({ spec: "role:judge", host });
+    const resolved = await resolveDecisionModel({ spec: "role:judge", host });
     expect(resolved?.source).toBe("session");
     expect(resolved?.backends.map((backend) => backend.kind)).toEqual(["text"]);
   });
@@ -380,7 +380,7 @@ describe("decision host construction", () => {
     expect(host.kind).toBe("unknown");
     expect(host.roles).toBe(false);
     expect(host.backends({ provider: "magpie", modelId: "group/labor" })).toEqual([]);
-    expect(resolveDecisionModel({ spec: "role:judge", host })).toBeUndefined();
+    await expect(resolveDecisionModel({ spec: "role:judge", host })).resolves.toBeUndefined();
   });
 });
 

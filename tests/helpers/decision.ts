@@ -65,7 +65,7 @@ export function fakeHost(overrides: Partial<DecisionHost> = {}): DecisionHost {
   return {
     kind: "pi",
     roles: false,
-    resolveRole: () => undefined,
+    resolveRole: async () => undefined,
     backends: () => [],
     ...overrides,
   };

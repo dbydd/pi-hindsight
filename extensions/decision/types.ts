@@ -129,8 +129,12 @@ export interface DecisionHost {
   readonly kind: HostKind;
   /** True when the host resolves role aliases (`role:<name>`); false on role-less hosts. */
   readonly roles: boolean;
-  /** Resolve a role name to a model ref. Only consulted when `roles` is true. */
-  resolveRole(name: string): DecisionModelRef | undefined;
+  /**
+   * Resolve a role name to a model ref. Only consulted when `roles` is true.
+   * Async on hosts whose role resolution loads host modules (omp); synchronous
+   * hosts and the degraded host answer directly.
+   */
+  resolveRole(name: string): DecisionModelRef | undefined | Promise<DecisionModelRef | undefined>;
   /**
    * The host's current session model. A role-less host uses it when a `role:`
    * spec cannot be resolved, so the default config still yields a model.
