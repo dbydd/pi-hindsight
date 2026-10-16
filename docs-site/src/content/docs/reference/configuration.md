@@ -429,6 +429,47 @@ classifier, then a text bridge over any chat model — and ends at the fallback 
 recall on and never raises into the calling turn, so an unreachable decision model costs routing
 quality instead of memory.
 
+**Choosing a backend.** The ladder is built from what the host can actually do, so pick the model and
+read the rungs off the table:
+
+| Host capability                                        | Rungs offered                                                                   |
+| ------------------------------------------------------ | ------------------------------------------------------------------------------- |
+| omp model whose api answers typed judgments            | native judgment api, then the host text judge                                   |
+| omp any other chat model                               | host text judge                                                                 |
+| omp on-device keyword model (`local-inference`)        | none — no drivable port, so the ladder is empty and routing falls straight back |
+| pi registry with a classifier surface                  | classifier, then a text bridge                                                  |
+| pi registry with a chat transport only                 | text bridge                                                                     |
+| no model, no transport, or an unbuildable host adapter | none — no rung, so the layer ends at the fallback banks                         |
+
+`decision.model` picks the model; the rungs come from it. `role:<name>` reads the host role table
+(`<provider>/<modelId>` on every host). The two hosts differ:
+
+|                | omp                                                                              | pi                                                                               |
+| -------------- | -------------------------------------------------------------------------------- | -------------------------------------------------------------------------------- |
+| Role table     | yes — `role:<name>` resolves; an unresolved role falls back to the session model | no — `role:<name>` is a skipped level, never an error; the session model is used |
+| Model ref      | resolved through the host model query facade, then the registry                  | registry lookup by `provider/modelId`                                            |
+| Preferred spec | `role:judge` when a judge role exists, else `<provider>/<modelId>`               | `<provider>/<modelId>`                                                           |
+
+A `<provider>/<modelId>` spec works on both hosts and is the portable choice. On pi, a `role:` spec
+is not a failure — it degrades to the session model, so a shared config still decides instead of
+erroring every turn.
+
+**When it is worth enabling.** The defaults call no model at all: `recall.mode: "every-turn"`,
+`recall.bankMode: "all"`, and coding `retain.mode: "always"` with no `decision` entry leaves routing
+exactly as it was, with no extra call and no added latency. Turn the layer on when a real routing
+question exists:
+
+- More than one bank competes for the same traffic — a shared coding bank plus a life bank plus a
+  scratch bank — and the right bank depends on the turn.
+- Injecting every turn is too costly, or injecting on irrelevant turns adds noise: `recall.mode: "decision"`
+  lets a turn skip itself.
+- Long sessions drift across topics, so a per-turn read set beats a fixed list.
+
+Keep it off when one bank serves everything (a single-bank or `Project Only` profile): the layer can
+only choose among the candidates offered, and there is nothing to choose. If you turn it on, set
+`decision.fallback.recallBanks` / `retainBanks` (or `banksFallback`) to a bank that exists — an empty
+filtered set makes the round skip rather than route.
+
 **Status.** Both halves are wired: `recall.mode: "decision"` reads gate A, `recall.bankMode:
 "decision"` reads gate B, and `banks[].retain.mode: "decision"` reads the write half of the table
 for that entry. Entries in `always` or `explicit-only` mode never reach the model, so a config with
