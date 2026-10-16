@@ -32,6 +32,7 @@ import {
 } from "./status.js";
 import { buildStatusFields } from "./status-fields.js";
 import type { ScopeMigratePlan } from "../operations/scope-migrate.js";
+import { OMP_MEMORY_BACKEND_FIX_COMMAND, type HostMemoryBackend } from "../config/omp-config.js";
 
 export interface DebugReportArgs {
   cwd: string;
@@ -58,6 +59,8 @@ export interface DebugReportArgs {
   scopeMigrate?: ScopeMigratePlan;
   /** Memory readiness: queue, git seed receipt, knowledge-page capability. */
   sync?: unknown;
+  /** omp built-in memory-backend fact; redundant means a second memory entry point exists. */
+  hostMemoryBackend?: HostMemoryBackend;
 }
 
 export function bankSelectionMessage(projectBankId: string, config: ResolvedConfig): string {
@@ -147,6 +150,7 @@ export function formatDebugReport(args: DebugReportArgs): string {
       : `unreachable: ${args.health.error}`
     : "not checked";
   const activity = args.activity ?? "idle";
+  const hostBackend = args.hostMemoryBackend;
   return JSON.stringify(
     {
       enabled: args.config.enabled,
@@ -167,6 +171,14 @@ export function formatDebugReport(args: DebugReportArgs): string {
       },
       health,
       ...(args.sync !== undefined ? { sync: args.sync } : {}),
+      hostMemoryBackend: hostBackend
+        ? {
+            ...hostBackend,
+            action: hostBackend.redundant
+              ? `omp's built-in memory backend is on (memory.backend=${hostBackend.backend}); it is a second memory entry point. Run \`${OMP_MEMORY_BACKEND_FIX_COMMAND}\` or /hindsight:omp-backend to turn it off.`
+              : null,
+          }
+        : null,
       cwd: args.cwd,
       repoRoot: findRepoRoot(args.cwd),
       sessionFile: args.sessionFile ?? null,

@@ -11,10 +11,12 @@ Pi Hindsight is **TUI-first**. Public slash commands:
 ```text
 /hindsight
 /hindsight:next-opt-out
+/hindsight:omp-backend
 ```
 
 `/hindsight` opens a **thin** memory hub: status, short guided setup, and emergency actions (mode, next-opt-out, flush, doctor). Day-to-day mission/mental-model/config edits belong to agent tools, not a TUI field farm.  
-`/hindsight:next-opt-out` skips automatic retain for the next agent run (also hub key `x`).
+`/hindsight:next-opt-out` skips automatic retain for the next agent run (also hub key `x`).  
+`/hindsight:omp-backend` shows omp's built-in memory backend and offers `off` / `hindsight` (no-op reporting on the Pi host, which has no built-in backend).
 
 ### Hub keys
 
@@ -100,9 +102,19 @@ Host controls:
 
 ### One memory entry point per host
 
-Pi ships no memory backend, so Pi Hindsight is its only memory surface there. omp ships a **built-in** Hindsight backend, and running it alongside this extension means two entry points writing two different banks from one session. Turn the built-in off by removing the `memory.backend` and `hindsight` blocks from `~/.omp/agent/config.yml`: `memory.backend` defaults to `off`, and the `hindsight.*` keys only configure that built-in. Removing them also drops omp's `recall` / `retain` / `reflect` / `learn` / `memory_edit` tools, its `memory://` namespace, and its mental-model injection — this extension owns all of those on both hosts.
+Pi ships no memory backend, so Pi Hindsight is its only memory surface there. omp ships a **built-in** Hindsight backend, and running it alongside this extension means two entry points writing two different banks from one session.
 
-Check it with `omp config get memory.backend` (expect `off`).
+Turn the built-in off through omp's own config CLI, which validates the value against omp's schema:
+
+```bash
+omp config reset memory.backend   # drop the key so omp's default (off) applies
+# or, equivalently:
+omp config set memory.backend off
+```
+
+Editing `~/.omp/agent/config.yml` by hand also works, but it bypasses omp's schema validation — prefer the CLI. With the built-in off, omp's `recall` / `retain` / `reflect` / `learn` / `memory_edit` tools, its `memory://` namespace, and its mental-model injection go quiet; this extension owns all of those on both hosts. The `hindsight.*` keys only configure that built-in backend, so they can be dropped with it.
+
+Check the effective value with `omp config get memory.backend` (expect `off`). Inside a session, `/hindsight:omp-backend` shows the current state and offers `off` / `hindsight`; `hindsight_status` carries a `hostMemoryBackend` fact (`{ host, backend, redundant, available }`) so an agent can spot a redundant second entry point, and doctor prints the exact fix command when `redundant` is true.
 
 Tool notes:
 

@@ -378,6 +378,7 @@ Dry-run only: plan dual-tag / legacy repo:<path-hash> → project:<id> migration
 | ------------------------- | ---------------------------------------------------------------------------------------------------- |
 | `/hindsight`              | Open Hindsight memory hub (status, mode, next-opt-out, mental models, import, flush, doctor, setup). |
 | `/hindsight:next-opt-out` | Skip automatic retain for the next agent run in this session.                                        |
+| `/hindsight:omp-backend`  | Show or switch omp's built-in memory backend so a session keeps one memory entry point.              |
 
 ## Config fields
 

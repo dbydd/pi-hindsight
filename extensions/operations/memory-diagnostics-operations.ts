@@ -1,5 +1,6 @@
 import { checkHindsight } from "../client/client.js";
 import { formatDebugReport } from "../utils/diagnostics.js";
+import { readHostMemoryBackend } from "../config/omp-config.js";
 import { resolveQueuePath, summarizeRetainQueue } from "../queue/queue.js";
 import {
   importManifestSummary,
@@ -20,7 +21,7 @@ export function createDiagnosticsOperations(deps: MemoryOperationsDeps) {
       const config = deps.getConfig();
       const projectBankId = deps.getProjectBankId();
       const manifestPath = resolveImportManifestPath(cwd, config.import.manifestPath);
-      const [health, queueSummary, manifestResult, sync] = await Promise.all([
+      const [health, queueSummary, manifestResult, sync, hostMemoryBackend] = await Promise.all([
         checkHindsight(deps.getClient(), projectBankId),
         summarizeRetainQueue(resolveQueuePath(cwd, config.retain.queuePath)),
         readImportManifestSafe(manifestPath),
@@ -30,6 +31,7 @@ export function createDiagnosticsOperations(deps: MemoryOperationsDeps) {
           client: deps.getClient(),
           bankId: projectBankId,
         }),
+        deps.getHostMemoryBackend?.() ?? readHostMemoryBackend(),
       ]);
       const imports = importManifestSummary(manifestResult.manifest);
       const scopeMigrate = buildScopeMigratePlan({ cwd, config, projectBankId });
@@ -54,6 +56,7 @@ export function createDiagnosticsOperations(deps: MemoryOperationsDeps) {
         health,
         scopeMigrate,
         sync,
+        hostMemoryBackend,
       });
     },
 
