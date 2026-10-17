@@ -44,12 +44,12 @@ Authoritative criteria: `docs/mission-and-mental-model-quality.md` (packaged; al
    `hostMemoryBackend`. `redundant: true` means omp's built-in memory backend is
    on alongside this extension, so the session has two memory entry points
    writing two different banks — memories look "lost" because the wrong bank was
-   written. Fix with one command, never a YAML edit:
+   written. On the Pi host this step does not apply, because Pi ships no built-in
+   backend. Fix with one command, never a YAML edit:
    - `omp config reset memory.backend` (or `omp config set memory.backend off`)
    - or run `/hindsight:omp-backend` and pick `off`; it re-reads and reports back.
    - `available: false` means the omp CLI could not answer; say so and ask the
      user to run the command manually rather than guessing.
-     On the Pi host this step does not apply — Pi ships no built-in backend.
 4. **Score against the quality guide** (priority order):
    1. Broken/empty MM content (`#`, empty, Generating…) — prefs MMs may need `fact_types` world+experience+observation, not observation-only
    2. A redundant omp backend (two entry points, the wrong bank being written)
