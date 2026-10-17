@@ -4,7 +4,12 @@ import type { ResolvedConfig } from "../types.js";
 import { DEFAULT_CONFIG } from "./config-defaults.js";
 import { envBool, isRecord, merge, normalizeConfig, validEnvVarName } from "./config-normalize.js";
 import { mergeBankEntries } from "./banks.js";
-import { globalConfigBasePath, projectConfigBasePath } from "./paths.js";
+import {
+  globalConfigBasePath,
+  globalSubagentConfigBasePath,
+  projectConfigBasePath,
+  projectSubagentConfigBasePath,
+} from "./paths.js";
 import type { BankConfigEntry } from "../types.js";
 
 export { DEFAULT_CONFIG } from "./config-defaults.js";
@@ -160,13 +165,38 @@ function userBankEntryId(banks: unknown): string {
 }
 
 /**
+ * Override layer for one subagent profile. `hindsight-subagent.json` groups its
+ * layers under `profiles.<name>`, so a profile that is not listed gets no layer
+ * and keeps the `hindsight.json` it would otherwise resolve. A file without that
+ * shape contributes nothing rather than acting as a whole-config override.
+ */
+function profileLayer(raw: unknown, agentName: string | undefined): unknown {
+  if (!agentName || !isRecord(raw)) return undefined;
+  const profiles = raw.profiles;
+  if (!isRecord(profiles)) return undefined;
+  const profile = profiles[agentName];
+  return isRecord(profile) ? profile : undefined;
+}
+
+/** Read a profile layer, or nothing when the file or the profile is absent. */
+function readProfileLayer(basePath: string | undefined, agentName: string | undefined): unknown {
+  if (basePath === undefined || !agentName) return undefined;
+  return profileLayer(readConfigFile(basePath), agentName);
+}
+
+/**
  * Resolve config for `cwd`. `sessionFile` is the live session's file when the caller
  * has one; host state paths otherwise fall back to the last registered session.
+ *
+ * `agentName` names the subagent profile this session runs, and only an omp
+ * subagent supplies one. A main session passes nothing and resolves the usual
+ * `hindsight.json` layers; pi reports no agent identity at all.
  */
 export function resolveConfig(
   cwd: string,
   env: NodeJS.ProcessEnv = process.env,
   sessionFile?: string,
+  agentName?: string,
 ): ResolvedConfig {
   migrateUserMemoryConfigFiles(cwd, env, sessionFile);
   // `banks` is a list, so the recursive deep merge below would replace it wholesale.
@@ -176,9 +206,20 @@ export function resolveConfig(
   const globalBase = globalConfigBasePath({ env, sessionFile });
   const homeConfig = globalBase === undefined ? undefined : readConfigFile(globalBase);
   const projectConfig = readConfigFile(projectConfigBasePath(cwd, { env, sessionFile }));
+  const globalSubagent = readProfileLayer(
+    globalSubagentConfigBasePath({ env, sessionFile }),
+    agentName,
+  );
+  const projectSubagent = readProfileLayer(
+    projectSubagentConfigBasePath(cwd, { env, sessionFile }),
+    agentName,
+  );
+  // Layer order is low to high: global hindsight, global subagent profile,
+  // project hindsight, project subagent profile.
+  const layers = [homeConfig, globalSubagent, projectConfig, projectSubagent];
   let config = merge(DEFAULT_CONFIG, homeConfig);
-  config = merge(config, projectConfig);
-  for (const layer of [homeConfig, projectConfig]) {
+  for (const layer of layers.slice(1)) config = merge(config, layer);
+  for (const layer of layers) {
     if (!isRecord(layer)) continue;
     if ("banks" in layer) banks = mergeBankEntries(banks, layer.banks);
     if ("banksFallback" in layer) banksFallback = layer.banksFallback;
@@ -229,5 +270,12 @@ export function resolveConfig(
   if (Object.keys(minScores).length) config = merge(config, { recall: { minScores } });
   config = { ...config, banks: mergeBankEntries(banks, []) };
   if (banksFallback !== undefined) config = { ...config, banksFallback: banksFallback as string[] };
-  return normalizeConfig(config, mergedRawLayers(homeConfig, projectConfig), env);
+  return normalizeConfig(
+    config,
+    mergedRawLayers(
+      mergedRawLayers(homeConfig, globalSubagent),
+      mergedRawLayers(projectConfig, projectSubagent),
+    ),
+    env,
+  );
 }

@@ -14,6 +14,46 @@ If both `.json` and `.jsonc` exist at the same scope, `.json` wins. Config is no
 
 Environment variables win the effective value. Project/user stored values can still be edited for future runs after the environment override is removed.
 
+## Subagent profiles (omp only)
+
+An omp subagent can resolve a different memory configuration from the session that spawned it. The
+overrides live in a separate file so `hindsight.json` keeps one meaning for every session:
+`hindsight-subagent.json` (or `.jsonc`) beside the normal config, at the same global and project
+scopes.
+
+```jsonc
+{
+  "profiles": {
+    "engineer": {
+      "banks": [{ "id": "coding", "bankId": "pi-coding-engineer" }],
+      "retain": { "enabled": false },
+    },
+    "theorist": {
+      "banks": [{ "id": "research", "bankId": "pi-research", "access": "read" }],
+    },
+  },
+}
+```
+
+Each key is the omp subagent definition name (`ctx.agent.name`, e.g. `engineer`). A session that
+matches no key resolves exactly what `hindsight.json` gives it, so a profile file can be added
+without changing any other session.
+
+Layer precedence, low to high:
+
+1. global `hindsight.json`
+2. global `hindsight-subagent.json` → `profiles.<name>`
+3. project `hindsight.json`
+4. project `hindsight-subagent.json` → `profiles.<name>`
+
+The profile layer is a patch of the same config shape, merged deep like any other layer. `banks`
+keeps the `id`/`alias` merge, so a profile can retarget one bank and leave the rest alone.
+
+**The main session never reads `hindsight-subagent.json`.** It resolves only `hindsight.json`, as
+before. Pi never applies a profile: its extension context carries no agent identity, so a pi
+session always resolves the ordinary config. A restriction chosen by a profile applies to the
+configuration the subagent sees; it does not narrow another session's access.
+
 ## `$schema`
 
 The first time guided setup or the memory tools write a config file, the file starts with a

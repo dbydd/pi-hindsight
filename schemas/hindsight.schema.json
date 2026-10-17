@@ -231,6 +231,11 @@
         "retain": { "type": "boolean" }
       },
       "additionalProperties": true
+    },
+    "profiles": {
+      "type": "object",
+      "description": "Per-subagent overrides. Read only from hindsight-subagent.json/.jsonc; the main session never loads that file. Each key is an omp subagent definition name and its value is a patch of this same config shape.",
+      "additionalProperties": { "$ref": "#" }
     }
   },
   "additionalProperties": true,

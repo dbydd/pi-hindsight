@@ -97,6 +97,8 @@ export function createMemoryLifecycle(
   let periodicFlushActive = false;
   let decisionHost: DecisionHost | undefined;
   let decisionLayer: DecisionLayer | undefined;
+  /** Subagent profile this session runs; undefined in a main session. */
+  let agentName: string | undefined;
   const stopPeriodicFlush = () => {
     if (!periodicFlush) return;
     clearInterval(periodicFlush);
@@ -105,7 +107,7 @@ export function createMemoryLifecycle(
 
   const reloadConfig = (cwd: string, sessionFile?: string) => {
     stopPeriodicFlush();
-    config = resolveConfig(cwd, process.env, sessionFile);
+    config = resolveConfig(cwd, process.env, sessionFile, agentName);
     client = createHindsightClient(config);
     projectBankId = deriveProjectBankId(cwd, config);
   };
@@ -238,6 +240,9 @@ export function createMemoryLifecycle(
     async initialize(ctx: RuntimeCtx): Promise<void> {
       const runtime = snapshotRuntime(ctx);
       if (!runtime) return;
+      // The profile is fixed for the life of a spawned session: omp creates one
+      // extension instance per subagent and never renames it.
+      agentName = runtime.agentName;
       // Host paths (`.pi` vs `.omp`) come from runtime truth: the live session file
       // first, the host package probe second. Both must land before any config read.
       setRuntimeSessionFile(runtime.sessionFile);

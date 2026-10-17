@@ -198,3 +198,14 @@ export function globalConfigBasePath(options: HostPathsOptions = {}): string | u
   const agentDir = resolveAgentDir(options);
   return agentDir === undefined ? undefined : join(agentDir, "hindsight");
 }
+
+/** Project-local subagent override base path (without .json/.jsonc). */
+export function projectSubagentConfigBasePath(cwd: string, options: HostPathsOptions = {}): string {
+  return join(cwd, hostConfigDirName(options), "hindsight-subagent");
+}
+
+/** Global subagent override base path (without .json/.jsonc). */
+export function globalSubagentConfigBasePath(options: HostPathsOptions = {}): string | undefined {
+  const agentDir = resolveAgentDir(options);
+  return agentDir === undefined ? undefined : join(agentDir, "hindsight-subagent");
+}

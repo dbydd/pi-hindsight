@@ -1,5 +1,6 @@
 import type { AgentMessage } from "@earendil-works/pi-agent-core";
 import { getSessionFile } from "../utils/session.js";
+import { subagentProfileName } from "../utils/agent-profile.js";
 import { formatHindsightStatus, type HindsightActivity } from "../utils/status.js";
 import type { ResolvedConfig } from "../types.js";
 
@@ -12,6 +13,8 @@ export type RuntimeCtx = {
   sessionManager?: { getSessionFile?: () => string | undefined };
   /** Pi agent abort signal for the active turn, when the context hook provides one. */
   signal?: AbortSignal | undefined;
+  /** omp subagent identity, when the host publishes one. */
+  agent?: unknown;
 };
 
 export type RuntimeSnapshot = {
@@ -19,6 +22,8 @@ export type RuntimeSnapshot = {
   ui: RuntimeCtx["ui"];
   sessionFile?: string;
   signal?: AbortSignal | undefined;
+  /** Subagent profile this session runs; absent in a main session. */
+  agentName?: string;
 };
 
 export type ContextEvent = { messages: AgentMessage[] };
@@ -30,11 +35,13 @@ export function snapshotRuntime(ctx: RuntimeCtx): RuntimeSnapshot | undefined {
     const ui = ctx.ui;
     const sessionFile = getSessionFile(ctx);
     const signal = ctx.signal;
+    const agentName = subagentProfileName(ctx);
     return {
       cwd,
       ui,
       ...(sessionFile ? { sessionFile } : {}),
       ...(signal ? { signal } : {}),
+      ...(agentName ? { agentName } : {}),
     };
   } catch {
     return undefined;
