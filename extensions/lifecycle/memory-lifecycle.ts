@@ -73,6 +73,8 @@ export interface MemoryLifecycleDecisionAdapters {
 
 export interface MemoryLifecycle {
   deps: MemoryLifecycleDeps;
+  /** The effective config for this session; read at call time. */
+  getConfig(): ResolvedConfig;
   initialize(ctx: RuntimeCtx): Promise<void>;
   recall(event: ContextEvent, ctx: RuntimeCtx): Promise<ContextPatch | undefined>;
   retain(
@@ -231,6 +233,7 @@ export function createMemoryLifecycle(
 
   return {
     deps,
+    getConfig: () => config,
 
     async initialize(ctx: RuntimeCtx): Promise<void> {
       const runtime = snapshotRuntime(ctx);

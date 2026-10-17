@@ -46,6 +46,14 @@ export const DEFAULT_CONFIG: ResolvedConfig = {
     maxContextCharsWritten: false,
     cacheTtlMs: 60_000,
     fallback: { recallBanks: [], retainBanks: [] },
+    // Off by default: the shipped config makes no request this layer does not
+    // already make. The defaults below name the local gateway's System One
+    // endpoint and its decision group, so enabling it needs no other tuning.
+    systemOne: {
+      enabled: false,
+      baseUrl: "http://127.0.0.1:3425",
+      model: "group/decider",
+    },
   },
   recall: {
     enabled: true,

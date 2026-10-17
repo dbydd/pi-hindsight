@@ -5,6 +5,7 @@ import {
   type ClassifierPort,
   type JudgePort,
 } from "./backends.js";
+import { createHttpSystemOneBackend } from "./systemone.js";
 import {
   createTextBackendAdapter,
   createTextBridgeBackend,
@@ -20,6 +21,7 @@ import type {
   HostKind,
   TodoState,
 } from "./types.js";
+import type { SystemOneConfig } from "../types.js";
 
 /**
  * Host adapters: the only place that knows how a host resolves models and which
@@ -364,6 +366,8 @@ export interface CreateDecisionHostInput {
   sessionId?: string;
   /** Loads the omp role surface; tests inject a runtime without a real host. */
   loadRoleRuntime?: () => Promise<OmpRoleRuntime | undefined>;
+  /** Reads the resolved config; the System One rung follows it per call. */
+  getSystemOne?: () => SystemOneConfig | undefined;
 }
 
 /** Adapter for the detected host; an unknown host offers no model and no rung. */
@@ -374,9 +378,12 @@ export function createDecisionHost(input: CreateDecisionHostInput): DecisionHost
       ...input,
       ctx: input.ctx,
       ...(input.loadRoleRuntime ? { loadRoleRuntime: input.loadRoleRuntime } : {}),
+      ...(input.getSystemOne ? { getSystemOne: input.getSystemOne } : {}),
     });
   }
-  if (kind === "pi" && input.ctx) return createPiHost(input.ctx);
+  if (kind === "pi" && input.ctx) {
+    return createPiHost(input.ctx, input.getSystemOne);
+  }
   return degradedDecisionHost();
 }
 
@@ -401,6 +408,8 @@ export interface CreateRuntimeDecisionHostInput {
   sessionId?: string;
   /** Loads the omp role surface; omitted outside tests. */
   loadRoleRuntime?: () => Promise<OmpRoleRuntime | undefined>;
+  /** Reads the resolved config; the System One rung follows it per call. */
+  getSystemOne?: () => SystemOneConfig | undefined;
 }
 
 /**
@@ -417,6 +426,7 @@ export async function createRuntimeDecisionHost(
       ...(input.ctx ? { ctx: input.ctx } : {}),
       ...(runtime ? { runtime } : {}),
       ...(input.sessionId ? { sessionId: input.sessionId } : {}),
+      ...(input.getSystemOne ? { getSystemOne: input.getSystemOne } : {}),
       loadRoleRuntime: input.loadRoleRuntime ?? loadDefaultRoleRuntime,
     });
   } catch {
@@ -448,8 +458,10 @@ function createOmpHost(input: {
   runtime?: OmpJudgmentRuntime;
   sessionId?: string;
   loadRoleRuntime?: () => Promise<OmpRoleRuntime | undefined>;
+  /** Reads the resolved config; the System One rung follows it per call. */
+  getSystemOne?: () => SystemOneConfig | undefined;
 }): DecisionHost {
-  const { ctx, runtime, sessionId } = input;
+  const { ctx, runtime, sessionId, getSystemOne } = input;
   const registry = (ctx.modelRegistry ?? {}) as HostRegistryLike;
   const models = ctx.models;
   return {
@@ -487,7 +499,17 @@ function createOmpHost(input: {
     modelContextWindow: (ref) => modelContextWindowOf(ompModelHandle(ctx, registry, ref)),
     backends(ref) {
       try {
-        return ompLadder(ompModelHandle(ctx, registry, ref), ref, runtime, registry, sessionId);
+        const rungs = ompLadder(
+          ompModelHandle(ctx, registry, ref),
+          ref,
+          runtime,
+          registry,
+          sessionId,
+        );
+        // The native judgment api stays first: it reaches the same model through
+        // the host's own transport. System One is the second rung, before the
+        // text bridge, so a typed decision still wins over text.
+        return withSystemOneRung(rungs, getSystemOne?.());
       } catch {
         // A host lookup failure removes every rung; it never reaches the caller.
         return [];
@@ -496,7 +518,10 @@ function createOmpHost(input: {
   };
 }
 
-function createPiHost(ctx: DecisionHostContext): DecisionHost {
+function createPiHost(
+  ctx: DecisionHostContext,
+  getSystemOne?: () => SystemOneConfig | undefined,
+): DecisionHost {
   const registry = (ctx.modelRegistry ?? {}) as HostRegistryLike;
   return {
     kind: "pi",
@@ -520,9 +545,40 @@ function createPiHost(ctx: DecisionHostContext): DecisionHost {
       }
       const complete = piCompletePort(registry, model);
       if (complete) rungs.push(createTextBridgeBackend(complete, { label: `bridge/${label}` }));
-      return rungs;
+      return withSystemOneRung(rungs, getSystemOne?.());
     },
   };
+}
+
+/**
+ * Insert the System One rung before the text bridge when the config enables it.
+ * pi's registry only resolves chat models, so its classifier rung never exists
+ * for a decision group; System One is the typed rung that works on both hosts
+ * because it reaches the gateway's own protocol instead of the host's model
+ * table. A disabled config adds nothing, and a misconfigured gateway fails at
+ * request time, which the ladder treats as any other failed rung.
+ */
+function withSystemOneRung(
+  rungs: DecisionBackend[],
+  systemOne: SystemOneConfig | undefined,
+): DecisionBackend[] {
+  if (!systemOne?.enabled) return rungs;
+  const apiKey = systemOne.apiKeyEnvVar ? process.env[systemOne.apiKeyEnvVar] : undefined;
+  const rung = createHttpSystemOneBackend(
+    {
+      baseUrl: systemOne.baseUrl,
+      ...(systemOne.model ? { model: systemOne.model } : {}),
+      ...(apiKey ? { apiKey } : {}),
+    },
+    `systemone/${systemOne.model || "default"}`,
+  );
+  // Before the bridge: the bridge is the untyped fallback, judged last.
+  const bridgeIndex = rungs.findIndex((existing) => existing.kind === "text");
+  if (bridgeIndex < 0) {
+    rungs.push(rung);
+    return rungs;
+  }
+  return [...rungs.slice(0, bridgeIndex), rung, ...rungs.slice(bridgeIndex)];
 }
 
 function ompModelHandle(

@@ -16,7 +16,7 @@ export interface DecisionModelRef {
 }
 
 /** Which rung of the backend ladder produced an answer; telemetry and diagnostics only. */
-export type DecisionBackendKind = "native-judge" | "classifier" | "text";
+export type DecisionBackendKind = "native-judge" | "classifier" | "systemone" | "text";
 
 /** One boolean question. The id is the answer key the backend must echo back. */
 export interface DecisionQuestion {

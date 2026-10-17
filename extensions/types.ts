@@ -106,6 +106,23 @@ export interface DecisionFallbackConfig {
 }
 
 /**
+ * System One transport for the decision gates. Off by default: the default
+ * config makes no request this layer does not already make.
+ *
+ * `baseUrl` and `model` default to the local gateway's System One endpoint and
+ * its decision group, so turning this on needs no further tuning on a machine
+ * that runs that gateway. `apiKeyEnvVar` names an environment variable holding
+ * the key; the key itself is never stored in the config.
+ */
+export interface SystemOneConfig {
+  enabled: boolean;
+  baseUrl: string;
+  model: string;
+  /** Name of the environment variable holding the gateway key. */
+  apiKeyEnvVar?: string;
+}
+
+/**
  * Decision-model settings: one call picks recall injection and bank routing.
  * `model` takes `role:<name>` (role-capable hosts) or `<provider>/<modelId>`.
  */
@@ -149,6 +166,8 @@ export interface DecisionConfig {
   maxContextCharsWritten: boolean;
   cacheTtlMs: number;
   fallback: DecisionFallbackConfig;
+  /** System One transport; adds one rung that speaks the decision protocol directly. */
+  systemOne: SystemOneConfig;
 }
 
 export interface BankEntryMission {

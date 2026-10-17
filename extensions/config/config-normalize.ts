@@ -6,6 +6,7 @@ import {
   type HindsightEntityInput,
   type RecallMinScores,
   type ResolvedConfig,
+  type SystemOneConfig,
 } from "../types.js";
 import { DEFAULT_CONFIG } from "./config-defaults.js";
 import { isRecord } from "./is-record.js";
@@ -206,6 +207,24 @@ function decisionConfig(value: unknown, banks: BankConfigEntry[]): DecisionConfi
       recallBanks: normalizeBanksFallback(fallback.recallBanks, banks),
       retainBanks: normalizeBanksFallback(fallback.retainBanks, banks),
     },
+    systemOne: systemOneConfig(raw.systemOne),
+  };
+}
+
+/**
+ * The System One transport. Disabled unless the config says otherwise, and the
+ * endpoint defaults fill in from the defaults table — a config that enables it
+ * without naming a gateway points at the local one. An `apiKeyEnvVar` that is
+ * not a usable environment-variable name is dropped rather than trusted.
+ */
+function systemOneConfig(value: unknown): SystemOneConfig {
+  const raw = isRecord(value) ? value : {};
+  const envVar = typeof raw.apiKeyEnvVar === "string" ? raw.apiKeyEnvVar : "";
+  return {
+    enabled: bool(raw.enabled, DEFAULT_CONFIG.decision.systemOne.enabled),
+    baseUrl: stringValue(raw.baseUrl, DEFAULT_CONFIG.decision.systemOne.baseUrl),
+    model: stringValue(raw.model, DEFAULT_CONFIG.decision.systemOne.model),
+    ...(envVar && validEnvVarName(envVar) ? { apiKeyEnvVar: envVar } : {}),
   };
 }
 

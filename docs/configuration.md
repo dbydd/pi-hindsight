@@ -456,6 +456,42 @@ that would otherwise have answered.
 cannot be read, never "no tasks"), the recent activity that fits the budget, and every candidate
 bank with its `access` and `description`.
 
+### System One transport (`decision.systemOne`)
+
+A rung that calls the gateway's System One endpoint directly, in the decision protocol's own
+`noul` question form, instead of a host chat or judgment surface. Off by default, so the default
+config makes no request this layer does not already make.
+
+```jsonc
+{
+  "decision": {
+    "systemOne": {
+      "enabled": true,
+      "baseUrl": "http://127.0.0.1:3425",
+      "model": "group/decider",
+      "apiKeyEnvVar": "GATEWAY_KEY",
+    },
+  },
+}
+```
+
+| Field          | Meaning                                                                                                  |
+| -------------- | -------------------------------------------------------------------------------------------------------- |
+| `enabled`      | When true the rung is built. Default `false`.                                                            |
+| `baseUrl`      | Gateway base URL; the rung posts to `<baseUrl>/v1/systemone`. Default `http://127.0.0.1:3425`.           |
+| `model`        | Decision model the gateway serves over System One. Default `group/decider`.                              |
+| `apiKeyEnvVar` | Name of the environment variable holding the gateway key. The key itself is never stored in this config. |
+
+Use it on Pi. Pi's model registry resolves chat models only, so a decision group never resolves
+there and the typed rung stays empty; System One reaches the gateway's own protocol and does not
+go through the host's model table. On omp the rung sits after the native judgment rung and before
+the text bridge, so a host-native typed judgment still wins when the model offers one.
+
+The rung is transport, not a separate decision: it gets the same state, the same question table,
+and the same `decision.threshold` as every other rung, and a gateway failure is an ordinary failed
+rung — the ladder moves on and the layer ends at `decision.fallback`. It speaks only `noul`
+questions, so no prompt or question-text change is needed to use it.
+
 ### Decision questions (`decision.instructions`)
 
 The text of the three questions the model answers. All three default to a text that says what the

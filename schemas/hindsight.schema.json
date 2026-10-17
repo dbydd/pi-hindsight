@@ -149,6 +149,29 @@
             "retainBanks": { "type": "array", "items": { "type": "string" } }
           },
           "additionalProperties": true
+        },
+        "systemOne": {
+          "type": "object",
+          "description": "System One transport for the decision gates. Off by default, so the default config makes no request this layer does not already make.",
+          "properties": {
+            "enabled": {
+              "type": "boolean",
+              "description": "When true, one ladder rung calls the gateway's System One endpoint directly instead of a host chat or judgment surface. Use it on pi, whose registry resolves chat models only."
+            },
+            "baseUrl": {
+              "type": "string",
+              "description": "Gateway base URL. The rung posts to <baseUrl>/v1/systemone. Defaults to http://127.0.0.1:3425."
+            },
+            "model": {
+              "type": "string",
+              "description": "Decision model the gateway serves over System One. Defaults to group/decider."
+            },
+            "apiKeyEnvVar": {
+              "type": "string",
+              "description": "Name of the environment variable holding the gateway key. The key itself is never stored in this config."
+            }
+          },
+          "additionalProperties": true
         }
       },
       "additionalProperties": true

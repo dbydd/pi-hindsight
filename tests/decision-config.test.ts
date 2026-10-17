@@ -34,6 +34,11 @@ describe("decision config normalization", () => {
       maxContextCharsWritten: false,
       cacheTtlMs: 60_000,
       fallback: { recallBanks: [], retainBanks: [] },
+      systemOne: {
+        enabled: false,
+        baseUrl: "http://127.0.0.1:3425",
+        model: "group/decider",
+      },
     });
   });
 

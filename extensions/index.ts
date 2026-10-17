@@ -43,6 +43,7 @@ export default function hindsightExtension(pi: ExtensionAPI) {
         createRuntimeDecisionHost({
           ...(sessionCtx ? { ctx: decisionHostContext(sessionCtx) } : {}),
           ...(sessionId ? { sessionId } : {}),
+          getSystemOne: () => lifecycle.getConfig().decision.systemOne,
         }),
       readTodo: () =>
         readDecisionTodoState(pi.events, () => sessionCtx?.sessionManager.getEntries() ?? []),
